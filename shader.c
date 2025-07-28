@@ -4,8 +4,22 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+typedef struct shader_context {
+  EGLDisplay display;
+  EGLSurface surface;
+  EGLContext context;
+  GLuint program;
+  GLuint texture;
+  GLuint fbo;
+  GLuint vao;
+  GLuint vbo;
+  int width;
+  int height;
+} shader_context;
 
 // Function to load a file into memory
 static char *load_file(const char *path) {
@@ -31,35 +45,46 @@ static char *load_file(const char *path) {
   return buffer;
 }
 
-// Function to check EGL errors
-static void check_egl_error(const char *msg) {
-  EGLint error = eglGetError();
-  if (error != EGL_SUCCESS) {
-    fprintf(stderr, "%s: EGL error 0x%04X\n", msg, error);
+static GLuint compile_shader(GLenum type, const char *source) {
+  GLuint shader = glCreateShader(type);
+  glShaderSource(shader, 1, &source, NULL);
+  glCompileShader(shader);
+
+  GLint success;
+  glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+  if (!success) {
+    char info_log[512];
+    glGetShaderInfoLog(shader, 512, NULL, info_log);
+    fprintf(stderr, "Shader compilation failed:\n%s\n", info_log);
+    glDeleteShader(shader);
+    return 0;
   }
+  return shader;
 }
 
-void apply_shader(cairo_surface_t *surface, const char *shader_path) {
-  int width = cairo_image_surface_get_width(surface);
-  int height = cairo_image_surface_get_height(surface);
-  unsigned char *data = cairo_image_surface_get_data(surface);
+shader_context *shader_context_create(const char *shader_path, int width,
+                                      int height) {
+  shader_context *ctx = calloc(1, sizeof(shader_context));
+  if (!ctx)
+    return NULL;
+
+  ctx->width = width;
+  ctx->height = height;
 
   // Initialize EGL
-  EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-  if (display == EGL_NO_DISPLAY) {
+  ctx->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if (ctx->display == EGL_NO_DISPLAY) {
     fprintf(stderr, "Failed to get EGL display\n");
-    return;
+    goto error;
   }
 
   EGLint major, minor;
-  if (!eglInitialize(display, &major, &minor)) {
+  if (!eglInitialize(ctx->display, &major, &minor)) {
     fprintf(stderr, "Failed to initialize EGL\n");
-    return;
+    goto error;
   }
 
-  printf("EGL initialized: %d.%d\n", major, minor);
-
-  // Choose EGL config
+  // Choose config
   const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
                                    EGL_OPENGL_ES3_BIT,
                                    EGL_SURFACE_TYPE,
@@ -72,89 +97,151 @@ void apply_shader(cairo_surface_t *surface, const char *shader_path) {
                                    8,
                                    EGL_ALPHA_SIZE,
                                    8,
-                                   EGL_DEPTH_SIZE,
-                                   0,
-                                   EGL_STENCIL_SIZE,
-                                   0,
                                    EGL_NONE};
 
   EGLConfig config;
   EGLint num_configs;
-  if (!eglChooseConfig(display, config_attribs, &config, 1, &num_configs) ||
+  if (!eglChooseConfig(ctx->display, config_attribs, &config, 1,
+                       &num_configs) ||
       num_configs == 0) {
     fprintf(stderr, "Failed to choose EGL config\n");
-    eglTerminate(display);
-    return;
+    goto error;
   }
 
-  // Create a dummy pbuffer surface
+  // Create pbuffer surface
   const EGLint pbuffer_attribs[] = {EGL_WIDTH, width, EGL_HEIGHT, height,
                                     EGL_NONE};
 
-  EGLSurface egl_surface =
-      eglCreatePbufferSurface(display, config, pbuffer_attribs);
-  if (egl_surface == EGL_NO_SURFACE) {
+  ctx->surface = eglCreatePbufferSurface(ctx->display, config, pbuffer_attribs);
+  if (ctx->surface == EGL_NO_SURFACE) {
     fprintf(stderr, "Failed to create EGL surface\n");
-    check_egl_error("eglCreatePbufferSurface");
-    eglTerminate(display);
-    return;
+    goto error;
   }
 
-  // Bind GLES API
+  // Bind API and create context
   eglBindAPI(EGL_OPENGL_ES_API);
 
-  // Create context
   const EGLint context_attribs[] = {EGL_CONTEXT_MAJOR_VERSION, 3,
                                     EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
 
-  EGLContext context =
-      eglCreateContext(display, config, EGL_NO_CONTEXT, context_attribs);
-  if (context == EGL_NO_CONTEXT) {
+  ctx->context =
+      eglCreateContext(ctx->display, config, EGL_NO_CONTEXT, context_attribs);
+  if (ctx->context == EGL_NO_CONTEXT) {
     fprintf(stderr, "Failed to create EGL context\n");
-    check_egl_error("eglCreateContext");
-    eglDestroySurface(display, egl_surface);
-    eglTerminate(display);
-    return;
+    goto error;
   }
 
-  // Make context current
-  if (!eglMakeCurrent(display, egl_surface, egl_surface, context)) {
-    fprintf(stderr, "Failed to make EGL context current\n");
-    check_egl_error("eglMakeCurrent");
-    eglDestroyContext(display, context);
-    eglDestroySurface(display, egl_surface);
-    eglTerminate(display);
-    return;
+  if (!eglMakeCurrent(ctx->display, ctx->surface, ctx->surface, ctx->context)) {
+    fprintf(stderr, "Failed to make context current\n");
+    goto error;
   }
 
-  printf("OpenGL ES %s\n", glGetString(GL_VERSION));
-
-  // Create texture from Cairo surface
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
+  // Create texture
+  glGenTextures(1, &ctx->texture);
+  glBindTexture(GL_TEXTURE_2D, ctx->texture);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-  // Allocate texture storage
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
 
-  // Create temporary buffer for RGBA data
-  uint8_t *rgba_data = malloc(width * height * 4);
-  if (!rgba_data) {
-    fprintf(stderr, "Memory allocation failed\n");
-    // Cleanup and return
-    glDeleteTextures(1, &texture);
-    eglDestroyContext(display, context);
-    eglDestroySurface(display, egl_surface);
-    eglTerminate(display);
-    return;
+  // Create FBO
+  glGenFramebuffers(1, &ctx->fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                         ctx->texture, 0);
+
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    fprintf(stderr, "Framebuffer incomplete\n");
+    goto error;
   }
 
-  // Convert BGRA to RGBA (Cairo's format to OpenGL's format)
+  // Load and compile shaders
+  char *fragment_src = load_file(shader_path);
+  if (!fragment_src) {
+    goto error;
+  }
+
+  const char *vertex_src = "#version 300 es\n"
+                           "layout(location=0) in vec4 position;\n"
+                           "layout(location=1) in vec2 texCoord;\n"
+                           "out vec2 vTexCoord;\n"
+                           "void main() {\n"
+                           "    gl_Position = position;\n"
+                           "    vTexCoord = texCoord;\n"
+                           "}\n";
+
+  GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_src);
+  GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+  free(fragment_src);
+
+  if (!vertex_shader || !fragment_shader) {
+    if (vertex_shader)
+      glDeleteShader(vertex_shader);
+    if (fragment_shader)
+      glDeleteShader(fragment_shader);
+    goto error;
+  }
+
+  ctx->program = glCreateProgram();
+  glAttachShader(ctx->program, vertex_shader);
+  glAttachShader(ctx->program, fragment_shader);
+  glLinkProgram(ctx->program);
+
+  glDeleteShader(vertex_shader);
+  glDeleteShader(fragment_shader);
+
+  GLint success;
+  glGetProgramiv(ctx->program, GL_LINK_STATUS, &success);
+  if (!success) {
+    char info_log[512];
+    glGetProgramInfoLog(ctx->program, 512, NULL, info_log);
+    fprintf(stderr, "Program linking failed:\n%s\n", info_log);
+    goto error;
+  }
+
+  // Set up vertex data
+  GLfloat vertices[] = {-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+                        -1.0f, 1.0f,  0.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+
+  glGenVertexArrays(1, &ctx->vao);
+  glGenBuffers(1, &ctx->vbo);
+
+  glBindVertexArray(ctx->vao);
+  glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
+                        (void *)0);
+  glEnableVertexAttribArray(0);
+
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
+                        (void *)(2 * sizeof(GLfloat)));
+  glEnableVertexAttribArray(1);
+
+  return ctx;
+
+error:
+  shader_context_destroy(ctx);
+  return NULL;
+}
+
+void shader_render(shader_context *ctx, cairo_surface_t *input,
+                   cairo_surface_t *output, float time) {
+  if (!ctx || !input || !output)
+    return;
+
+  // Make context current
+  eglMakeCurrent(ctx->display, ctx->surface, ctx->surface, ctx->context);
+
+  // Update texture with input surface
+  unsigned char *data = cairo_image_surface_get_data(input);
+  int width = cairo_image_surface_get_width(input);
+  int height = cairo_image_surface_get_height(input);
+
+  // Convert BGRA to RGBA
+  uint8_t *rgba_data = malloc(width * height * 4);
   for (int i = 0; i < width * height; i++) {
     rgba_data[i * 4 + 0] = data[i * 4 + 2]; // R
     rgba_data[i * 4 + 1] = data[i * 4 + 1]; // G
@@ -162,170 +249,98 @@ void apply_shader(cairo_surface_t *surface, const char *shader_path) {
     rgba_data[i * 4 + 3] = data[i * 4 + 3]; // A
   }
 
-  // Upload texture data
+  glBindTexture(GL_TEXTURE_2D, ctx->texture);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
                   GL_UNSIGNED_BYTE, rgba_data);
   free(rgba_data);
 
-  // Create framebuffer
-  GLuint fbo;
-  glGenFramebuffers(1, &fbo);
-  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                         texture, 0);
-
-  // Check framebuffer status
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    fprintf(stderr, "Framebuffer is not complete\n");
-    glDeleteFramebuffers(1, &fbo);
-    glDeleteTextures(1, &texture);
-    eglDestroyContext(display, context);
-    eglDestroySurface(display, egl_surface);
-    eglTerminate(display);
-    return;
-  }
-
-  // Load shader source
-  char *shader_source = load_file(shader_path);
-  if (!shader_source) {
-    glDeleteFramebuffers(1, &fbo);
-    glDeleteTextures(1, &texture);
-    eglDestroyContext(display, context);
-    eglDestroySurface(display, egl_surface);
-    eglTerminate(display);
-    return;
-  }
-
-  // Compile shaders
-  const char *vertex_shader_src = "#version 300 es\n"
-                                  "layout(location=0) in vec4 position;\n"
-                                  "layout(location=1) in vec2 texCoord;\n"
-                                  "out vec2 vTexCoord;\n"
-                                  "void main() {\n"
-                                  "    gl_Position = position;\n"
-                                  "    vTexCoord = texCoord;\n"
-                                  "}\n";
-
-  // Vertex shader
-  GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &vertex_shader_src, NULL);
-  glCompileShader(vertex_shader);
-
-  GLint success;
-  glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-  if (!success) {
-    char info_log[512];
-    glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
-    fprintf(stderr, "Vertex shader compilation failed:\n%s\n", info_log);
-  }
-
-  // Fragment shader
-  GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, (const char *const *)&shader_source, NULL);
-  glCompileShader(fragment_shader);
-
-  glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-  if (!success) {
-    char info_log[512];
-    glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
-    fprintf(stderr, "Fragment shader compilation failed:\n%s\n", info_log);
-  }
-
-  free(shader_source);
-
-  // Create shader program
-  GLuint program = glCreateProgram();
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-
-  glGetProgramiv(program, GL_LINK_STATUS, &success);
-  if (!success) {
-    char info_log[512];
-    glGetProgramInfoLog(program, 512, NULL, info_log);
-    fprintf(stderr, "Shader linking failed:\n%s\n", info_log);
-  }
-
-  // Set up vertex data
-  GLfloat vertices[] = {-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-                        -1.0f, 1.0f,  0.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};
-
-  GLuint vao, vbo;
-  glGenVertexArrays(1, &vao);
-  glGenBuffers(1, &vbo);
-
-  glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-  // Position attribute
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
-                        (void *)0);
-  glEnableVertexAttribArray(0);
-
-  // Texture coordinate attribute
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat),
-                        (void *)(2 * sizeof(GLfloat)));
-  glEnableVertexAttribArray(1);
-
   // Render
+  glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
   glViewport(0, 0, width, height);
 
-  glUseProgram(program);
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, texture);
+  glUseProgram(ctx->program);
 
-  // Get and set the texture uniform location
-  GLint texLoc = glGetUniformLocation(program, "u_texture");
-  if (texLoc == -1) {
-    fprintf(stderr, "u_texture uniform not found!\n");
-  } else {
-    glUniform1i(texLoc, 0); // Texture unit 0
+  // Set uniforms
+  GLint texLoc = glGetUniformLocation(ctx->program, "u_texture");
+  if (texLoc != -1) {
+    glUniform1i(texLoc, 0);
   }
 
-  // Set resolution uniform
-  GLint resLoc = glGetUniformLocation(program, "iResolution");
+  GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
   if (resLoc != -1) {
     glUniform2f(resLoc, (float)width, (float)height);
   }
 
-  // Set time uniform
-  static float time = 0.0f;
-  time += 0.016f; // ~60fps delta
-  printf("Time: %f\n", time);
-  GLint timeLoc = glGetUniformLocation(program, "iTime");
+  GLint timeLoc = glGetUniformLocation(ctx->program, "iTime");
   if (timeLoc != -1) {
     glUniform1f(timeLoc, time);
   }
 
-  glBindVertexArray(vao);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, ctx->texture);
+
+  glBindVertexArray(ctx->vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-  // Read back to surface
-  uint8_t *readback_data = malloc(width * height * 4);
-  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, readback_data);
+  // Read back to output surface
+  unsigned char *out_data = cairo_image_surface_get_data(output);
+  int out_width = cairo_image_surface_get_width(output);
+  int out_height = cairo_image_surface_get_height(output);
 
-  // Convert back to Cairo's BGRA format
-  for (int i = 0; i < width * height; i++) {
-    data[i * 4 + 0] = readback_data[i * 4 + 2]; // B
-    data[i * 4 + 1] = readback_data[i * 4 + 1]; // G
-    data[i * 4 + 2] = readback_data[i * 4 + 0]; // R
-    data[i * 4 + 3] = readback_data[i * 4 + 3]; // A
+  uint8_t *readback = malloc(out_width * out_height * 4);
+  glReadPixels(0, 0, out_width, out_height, GL_RGBA, GL_UNSIGNED_BYTE,
+               readback);
+
+  // Convert RGBA to BGRA
+  for (int i = 0; i < out_width * out_height; i++) {
+    out_data[i * 4 + 0] = readback[i * 4 + 2]; // B
+    out_data[i * 4 + 1] = readback[i * 4 + 1]; // G
+    out_data[i * 4 + 2] = readback[i * 4 + 0]; // R
+    out_data[i * 4 + 3] = readback[i * 4 + 3]; // A
   }
-  free(readback_data);
+  free(readback);
 
-  // Clean up
-  glDeleteVertexArrays(1, &vao);
-  glDeleteBuffers(1, &vbo);
-  glDeleteProgram(program);
-  glDeleteShader(vertex_shader);
-  glDeleteShader(fragment_shader);
-  glDeleteTextures(1, &texture);
-  glDeleteFramebuffers(1, &fbo);
+  cairo_surface_mark_dirty(output);
+}
 
-  eglDestroyContext(display, context);
-  eglDestroySurface(display, egl_surface);
-  eglTerminate(display);
+void shader_context_destroy(shader_context *ctx) {
+  if (!ctx)
+    return;
 
-  cairo_surface_mark_dirty(surface);
+  if (ctx->display) {
+    eglMakeCurrent(ctx->display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                   EGL_NO_CONTEXT);
+
+    if (ctx->context) {
+      eglDestroyContext(ctx->display, ctx->context);
+    }
+
+    if (ctx->surface) {
+      eglDestroySurface(ctx->display, ctx->surface);
+    }
+
+    eglTerminate(ctx->display);
+  }
+
+  if (ctx->program) {
+    glDeleteProgram(ctx->program);
+  }
+
+  if (ctx->texture) {
+    glDeleteTextures(1, &ctx->texture);
+  }
+
+  if (ctx->fbo) {
+    glDeleteFramebuffers(1, &ctx->fbo);
+  }
+
+  if (ctx->vao) {
+    glDeleteVertexArrays(1, &ctx->vao);
+  }
+
+  if (ctx->vbo) {
+    glDeleteBuffers(1, &ctx->vbo);
+  }
+
+  free(ctx);
 }

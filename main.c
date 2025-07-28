@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/time.h>
 #include <wayland-client.h>
 
 /*
@@ -55,12 +56,13 @@ struct swaybg_state {
   struct wl_list outputs; // struct swaybg_output::link
   struct wl_list images;  // struct swaybg_image::link
   bool run_display;
+  struct timeval start_time; // Track program start time for shaders
 };
 
 struct swaybg_image {
   struct wl_list link;
   const char *path;
-  bool load_required;
+  cairo_surface_t *surface; // Store loaded surface
 };
 
 struct swaybg_output_config {
@@ -98,6 +100,10 @@ struct swaybg_output {
   uint32_t buffer_width, buffer_height;
 
   struct wl_list link;
+
+  // Shader state
+  struct shader_context *shader_ctx;
+  cairo_surface_t *shader_surface;
 };
 
 // Create a wl_buffer with the specified dimensions and content
@@ -168,16 +174,57 @@ static void get_buffer_size(const struct swaybg_output *output,
   }
 }
 
-static void render_frame(struct swaybg_output *output,
-                         cairo_surface_t *surface) {
+static void render_frame(struct swaybg_output *output) {
   uint32_t buffer_width, buffer_height;
   get_buffer_size(output, &buffer_width, &buffer_height);
 
-  // Attach a new buffer if the desired size has changed
+  // Calculate elapsed time for shaders
+  float time = 0.0f;
+  if (output->config->shader_path) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    time = (now.tv_sec - output->state->start_time.tv_sec) +
+           (now.tv_usec - output->state->start_time.tv_usec) / 1000000.0f;
+  }
+
+  // Process shader if needed
+  cairo_surface_t *render_surface = NULL;
+  if (output->config->shader_path && output->config->image &&
+      output->config->image->surface) {
+    if (!output->shader_ctx) {
+      output->shader_ctx = shader_context_create(
+          output->config->shader_path,
+          cairo_image_surface_get_width(output->config->image->surface),
+          cairo_image_surface_get_height(output->config->image->surface));
+    }
+
+    if (output->shader_ctx) {
+      if (!output->shader_surface ||
+          cairo_image_surface_get_width(output->shader_surface) !=
+              (int)buffer_width ||
+          cairo_image_surface_get_height(output->shader_surface) !=
+              (int)buffer_height) {
+        if (output->shader_surface) {
+          cairo_surface_destroy(output->shader_surface);
+        }
+        output->shader_surface = cairo_image_surface_create(
+            CAIRO_FORMAT_ARGB32, buffer_width, buffer_height);
+      }
+
+      shader_render(output->shader_ctx, output->config->image->surface,
+                    output->shader_surface, time);
+      render_surface = output->shader_surface;
+
+      output->dirty = true;
+    }
+  } else if (output->config->image && output->config->image->surface) {
+    render_surface = output->config->image->surface;
+  }
+
   struct wl_buffer *buf = NULL;
   if (buffer_width != output->buffer_width ||
-      buffer_height != output->buffer_height) {
-    buf = draw_buffer(output, surface, buffer_width, buffer_height);
+      buffer_height != output->buffer_height || output->dirty) {
+    buf = draw_buffer(output, render_surface, buffer_width, buffer_height);
     if (!buf) {
       return;
     }
@@ -185,7 +232,6 @@ static void render_frame(struct swaybg_output *output,
     wl_surface_attach(output->surface, buf, 0, 0);
     wl_surface_damage_buffer(output->surface, 0, 0, buffer_width,
                              buffer_height);
-
     output->buffer_width = buffer_width;
     output->buffer_height = buffer_height;
   }
@@ -196,6 +242,7 @@ static void render_frame(struct swaybg_output *output,
   } else {
     wl_surface_set_buffer_scale(output->surface, output->scale);
   }
+
   wl_surface_commit(output->surface);
   if (buf) {
     wl_buffer_destroy(buf);
@@ -223,6 +270,15 @@ static void destroy_swaybg_output(struct swaybg_output *output) {
   if (!output) {
     return;
   }
+
+  if (output->shader_ctx) {
+    shader_context_destroy(output->shader_ctx);
+  }
+
+  if (output->shader_surface) {
+    cairo_surface_destroy(output->shader_surface);
+  }
+
   wl_list_remove(&output->link);
   if (output->layer_surface != NULL) {
     zwlr_layer_surface_v1_destroy(output->layer_surface);
@@ -621,29 +677,38 @@ int main(int argc, char **argv) {
   wl_list_init(&state.configs);
   wl_list_init(&state.outputs);
   wl_list_init(&state.images);
+  gettimeofday(&state.start_time, NULL); // Initialize shader time
 
   parse_command_line(argc, argv, &state);
 
-  // Identify distinct image paths which will need to be loaded
+  // Load images
   struct swaybg_image *image;
   struct swaybg_output_config *config;
   wl_list_for_each(config, &state.configs, link) {
-    if (!config->image_path) {
+    if (!config->image_path)
       continue;
-    }
+
+    bool found = false;
     wl_list_for_each(image, &state.images, link) {
       if (strcmp(image->path, config->image_path) == 0) {
         config->image = image;
+        found = true;
         break;
       }
     }
-    if (config->image) {
-      continue;
+
+    if (!found) {
+      image = calloc(1, sizeof(struct swaybg_image));
+      image->path = config->image_path;
+      image->surface = load_background_image(image->path);
+      if (!image->surface) {
+        swaybg_log(LOG_ERROR, "Failed to load image: %s", image->path);
+        free(image);
+        continue;
+      }
+      wl_list_insert(&state.images, &image->link);
+      config->image = image;
     }
-    image = calloc(1, sizeof(struct swaybg_image));
-    image->path = config->image_path;
-    wl_list_insert(&state.images, &image->link);
-    config->image = image;
   }
 
   state.display = wl_display_connect(NULL);
@@ -667,7 +732,7 @@ int main(int argc, char **argv) {
   }
 
   state.run_display = true;
-  while (wl_display_dispatch(state.display) != -1 && state.run_display) {
+  while (state.run_display && wl_display_roundtrip(state.display) >= 0) {
     // Send acks, and determine which images need to be loaded
     struct swaybg_output *output;
     wl_list_for_each(output, &state.outputs, link) {
@@ -676,51 +741,19 @@ int main(int argc, char **argv) {
         zwlr_layer_surface_v1_ack_configure(output->layer_surface,
                                             output->configure_serial);
       }
-
-      if (output->dirty) {
-        uint32_t buffer_width, buffer_height;
-        get_buffer_size(output, &buffer_width, &buffer_height);
-        bool buffer_change = output->buffer_width != buffer_width ||
-                             output->buffer_height != buffer_height;
-        if (output->config->image && buffer_change) {
-          output->config->image->load_required = true;
-        }
-      }
     }
 
-    // Load images, render associated frames, and unload
-    wl_list_for_each(image, &state.images, link) {
-      if (!image->load_required) {
-        continue;
-      }
-
-      cairo_surface_t *surface = load_background_image(image->path);
-      if (!surface) {
-        swaybg_log(LOG_ERROR, "Failed to load image: %s", image->path);
-        continue;
-      }
-
-      wl_list_for_each(output, &state.outputs, link) {
-        if (output->dirty && output->config->image == image) {
-          output->dirty = false;
-          if (output->config->shader_path) {
-            apply_shader(surface, output->config->shader_path);
-          }
-          render_frame(output, surface);
-        }
-      }
-
-      image->load_required = false;
-      cairo_surface_destroy(surface);
-    }
-
-    // Redraw outputs without associated image
     wl_list_for_each(output, &state.outputs, link) {
-      if (output->dirty) {
+      if (output->dirty && output->config->image == image) {
         output->dirty = false;
-        render_frame(output, NULL);
+        printf("Render\n");
+        render_frame(output);
       }
     }
+
+    // Limit to 60 FPS
+    struct timespec sleep_time = {.tv_nsec = 166666};
+    nanosleep(&sleep_time, NULL);
   }
 
   struct swaybg_output *output, *tmp_output;

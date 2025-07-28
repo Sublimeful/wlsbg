@@ -3,6 +3,13 @@
 
 #include <cairo.h>
 
-void apply_shader(cairo_surface_t *surface, const char *shader_path);
+// Opaque shader context
+typedef struct shader_context shader_context;
+
+shader_context *shader_context_create(const char *shader_path, int width,
+                                      int height);
+void shader_render(shader_context *ctx, cairo_surface_t *input,
+                   cairo_surface_t *output, float time);
+void shader_context_destroy(shader_context *ctx);
 
 #endif
