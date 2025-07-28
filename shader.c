@@ -231,8 +231,8 @@ error:
 
 void shader_render(shader_context *ctx, cairo_surface_t *input,
                    cairo_surface_t *output, float time, float mouse_x,
-                   float mouse_y, bool is_down, float down_x, float down_y,
-                   float click_x, float click_y) {
+                   float mouse_y, float down_x, float down_y, float click_x,
+                   float click_y, bool is_down, bool is_clicked) {
   if (!ctx || !input || !output)
     return;
 
@@ -265,9 +265,19 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
     glUniform2f(mousePosLoc, mouse_x, mouse_y);
   }
 
+  printf("Mouse x: %f\n", mouse_x);
+  printf("Mouse y: %f\n", mouse_y);
+  printf("Mouse down x: %f\n", down_x);
+  printf("Mouse down y: %f\n", down_y);
+  printf("Mouse clicked x: %f\n", click_x);
+  printf("Mouse clicked y: %f\n", click_y);
+  printf("Is down: %s\n", is_down ? "Yes" : "No");
+  printf("Is clicked: %s\n", is_clicked ? "Yes" : "No");
+
   GLint mouseClickLoc = glGetUniformLocation(ctx->program, "iMouseClickPos");
   if (mouseClickLoc != -1) {
-    glUniform2f(mouseClickLoc, click_x, click_y);
+    int sign = (is_clicked ? -1 : 1);
+    glUniform2f(mouseClickLoc, click_x * sign, click_y * sign);
   }
 
   GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");

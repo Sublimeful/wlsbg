@@ -59,12 +59,14 @@ struct swaybg_state {
   struct timeval start_time; // Track program start time for shaders
   struct wl_seat *seat;
   struct wl_pointer *pointer;
+
+  // Track mouse positions globally
   struct {
-    float x, y;           // Track global mouse position
-    float down_x, down_y; // mouse.xy - position during button down
-    float click_x,
-        click_y;  // abs(mouse.zw) - position during last click
-    bool is_down; // sign(mouse.z) - button is down
+    float x, y;             // mouse position
+    float down_x, down_y;   // position during button down
+    float click_x, click_y; // position during last click
+    bool is_down;           // button is down
+    bool is_clicked;        // button was clicked
   } mouse;
 };
 
@@ -114,8 +116,14 @@ struct swaybg_output {
   struct shader_context *shader_ctx;
   cairo_surface_t *shader_surface;
 
-  float mouse_x, mouse_y; // Track mouse position relative to output
-  int32_t x, y;           // Output position
+  int32_t x, y; // Output position
+
+  // Track mouse positions relative to output
+  struct {
+    float x, y;             // mouse position
+    float down_x, down_y;   // position during button down
+    float click_x, click_y; // position during last click
+  } mouse;
 };
 
 // Add new listeners
@@ -149,8 +157,11 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
   if (button == BTN_LEFT) {
     s->mouse.is_down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
     if (s->mouse.is_down) {
+      s->mouse.is_clicked = true;
       s->mouse.click_x = s->mouse.x;
       s->mouse.click_y = s->mouse.y;
+    } else {
+      s->mouse.is_clicked = false;
     }
   }
 }
@@ -207,18 +218,33 @@ static void seat_handle_name(void *data, struct wl_seat *wl_seat,
 static const struct wl_seat_listener seat_listener = {seat_handle_capabilities,
                                                       seat_handle_name};
 
+// Normalize and set mouse positions relative to output x and y
+static void normalize_mouse_position(float input_mouse_x, float input_mouse_y,
+                                     float *output_mouse_x,
+                                     float *output_mouse_y, int32_t output_x,
+                                     int32_t output_y) {
+  if (input_mouse_x >= 0 && input_mouse_y >= 0) { // Valid position
+    *output_mouse_x = input_mouse_x - output_x;
+    *output_mouse_y = input_mouse_y - output_y;
+  } else {
+    // Use invalid position when mouse not available
+    *output_mouse_x = -1;
+    *output_mouse_y = -1;
+  }
+}
+
 // Update output mouse positions before rendering
 static void update_mouse_positions(struct swaybg_state *state) {
   struct swaybg_output *output;
   wl_list_for_each(output, &state->outputs, link) {
-    if (state->mouse.x >= 0 && state->mouse.y >= 0) { // Valid position
-      output->mouse_x = state->mouse.x - output->x;
-      output->mouse_y = state->mouse.y - output->y;
-    } else {
-      // Use center position when mouse not available
-      output->mouse_x = 0.5f;
-      output->mouse_y = 0.5f;
-    }
+    normalize_mouse_position(state->mouse.x, state->mouse.y, &output->mouse.x,
+                             &output->mouse.y, output->x, output->y);
+    normalize_mouse_position(state->mouse.down_x, state->mouse.down_y,
+                             &output->mouse.down_x, &output->mouse.down_y,
+                             output->x, output->y);
+    normalize_mouse_position(state->mouse.click_x, state->mouse.click_y,
+                             &output->mouse.click_x, &output->mouse.click_y,
+                             output->x, output->y);
   }
 }
 
@@ -327,10 +353,11 @@ static void render_frame(struct swaybg_output *output) {
       }
 
       shader_render(output->shader_ctx, output->config->image->surface,
-                    output->shader_surface, time, output->mouse_x,
-                    output->mouse_y, output->state->mouse.is_down,
-                    output->state->mouse.down_x, output->state->mouse.down_y,
-                    output->state->mouse.click_x, output->state->mouse.click_y);
+                    output->shader_surface, time, output->mouse.x,
+                    output->mouse.y, output->mouse.down_x, output->mouse.down_y,
+                    output->mouse.click_x, output->mouse.click_y,
+                    output->state->mouse.is_down,
+                    output->state->mouse.is_clicked);
       render_surface = output->shader_surface;
 
       output->dirty = true;
@@ -601,11 +628,15 @@ static void handle_global(void *data, struct wl_registry *registry,
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
 
-    // Initialize output mouse position to center
-    output->mouse_x = 0.5f;
-    output->mouse_y = 0.5f;
     output->x = 0;
     output->y = 0;
+    // Initialize output mouse positions to invalid positions
+    output->mouse.x = -1;
+    output->mouse.y = -1;
+    output->mouse.down_x = -1;
+    output->mouse.down_y = -1;
+    output->mouse.click_x = -1;
+    output->mouse.click_y = -1;
   } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
     state->layer_shell =
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
@@ -806,15 +837,15 @@ int main(int argc, char **argv) {
   wl_list_init(&state.images);
   gettimeofday(&state.start_time, NULL); // Initialize shader time
 
-  // Initialize mouse to invalid position
+  // Initialize mouse positions to invalid position
   state.mouse.x = -1;
   state.mouse.y = -1;
-  // Reset mouse state
+  state.mouse.down_x = -1;
+  state.mouse.down_y = -1;
+  state.mouse.click_x = -1;
+  state.mouse.click_y = -1;
   state.mouse.is_down = false;
-  state.mouse.down_x = 0.0f;
-  state.mouse.down_y = 0.0f;
-  state.mouse.click_x = 0.0f;
-  state.mouse.click_y = 0.0f;
+  state.mouse.is_clicked = false;
 
   parse_command_line(argc, argv, &state);
 
@@ -888,6 +919,9 @@ int main(int argc, char **argv) {
         render_frame(output);
       }
     }
+
+    // Update mouse state (is clicked should only be for one frame)
+    state.mouse.is_clicked = false;
 
     // Limit to 60 FPS
     struct timespec sleep_time = {.tv_nsec = 166666};

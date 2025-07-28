@@ -11,8 +11,8 @@ shader_context *shader_context_create(const char *shader_path, int width,
                                       int height);
 void shader_render(shader_context *ctx, cairo_surface_t *input,
                    cairo_surface_t *output, float time, float mouse_x,
-                   float mouse_y, bool is_down, float down_x, float down_y,
-                   float click_x, float click_y);
+                   float mouse_y, float down_x, float down_y, float click_x,
+                   float click_y, bool is_down, bool is_clicked);
 void shader_context_destroy(shader_context *ctx);
 
 #endif
