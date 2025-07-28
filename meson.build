@@ -28,6 +28,7 @@ if is_freebsd
 endif
 
 rt = cc.find_library('rt')
+math = cc.find_library('m', required: false)
 
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols', version: '>=1.31')
@@ -105,6 +106,7 @@ executable(
 	dependencies: [
 		cairo,
 		rt,
+        math,
 		gdk_pixbuf,
 		wayland_client,
         opengl_dep,

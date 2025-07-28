@@ -11,6 +11,7 @@
 #include <bits/getopt_core.h>
 #include <ctype.h>
 #include <getopt.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +58,9 @@ struct swaybg_state {
   struct wl_list images;  // struct swaybg_image::link
   bool run_display;
   struct timeval start_time; // Track program start time for shaders
+  struct wl_seat *seat;
+  struct wl_pointer *pointer;
+  float mouse_x, mouse_y; // Track global mouse position
 };
 
 struct swaybg_image {
@@ -104,7 +108,104 @@ struct swaybg_output {
   // Shader state
   struct shader_context *shader_ctx;
   cairo_surface_t *shader_surface;
+
+  float mouse_x, mouse_y; // Track mouse position relative to output
+  int32_t x, y;           // Output position
 };
+
+// Add new listeners
+static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
+                                  uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
+  struct swaybg_state *state = data;
+  state->mouse_x = wl_fixed_to_double(sx);
+  state->mouse_y = wl_fixed_to_double(sy);
+}
+
+static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
+                                 uint32_t serial, struct wl_surface *surface,
+                                 wl_fixed_t sx, wl_fixed_t sy) {
+  // Update state when pointer enters any surface
+  pointer_handle_motion(data, pointer, serial, sx, sy);
+}
+
+static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
+                                 uint32_t serial, struct wl_surface *surface) {}
+
+static void pointer_handle_button(void *data, struct wl_pointer *pointer,
+                                  uint32_t serial, uint32_t time,
+                                  uint32_t button, uint32_t state) {}
+
+static void pointer_handle_axis(void *data, struct wl_pointer *pointer,
+                                uint32_t time, uint32_t axis,
+                                wl_fixed_t value) {}
+
+static void pointer_handle_frame(void *data, struct wl_pointer *pointer) {}
+
+static void pointer_handle_axis_source(void *data, struct wl_pointer *pointer,
+                                       uint32_t axis_source) {}
+
+static void pointer_handle_axis_stop(void *data, struct wl_pointer *pointer,
+                                     uint32_t time, uint32_t axis) {}
+
+static void pointer_handle_axis_discrete(void *data,
+                                         struct wl_pointer *wl_pointer,
+                                         uint32_t axis, int discrete) {}
+
+static void pointer_handle_axis_value120(void *data,
+                                         struct wl_pointer *wl_pointer,
+                                         uint32_t axis, int value) {}
+
+static void pointer_handle_axis_relative_direction(
+    void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis) {}
+
+static const struct wl_pointer_listener pointer_listener = {
+    pointer_handle_enter,
+    pointer_handle_leave,
+    pointer_handle_motion,
+    pointer_handle_button,
+    pointer_handle_axis,
+    pointer_handle_frame,
+    pointer_handle_axis_source,
+    pointer_handle_axis_stop,
+    pointer_handle_axis_discrete,
+    pointer_handle_axis_value120,
+    pointer_handle_axis_relative_direction,
+};
+
+static void seat_handle_capabilities(void *data, struct wl_seat *seat,
+                                     enum wl_seat_capability caps) {
+  struct swaybg_state *state = data;
+  if ((caps & WL_SEAT_CAPABILITY_POINTER) && !state->pointer) {
+    state->pointer = wl_seat_get_pointer(seat);
+    wl_pointer_add_listener(state->pointer, &pointer_listener, state);
+  }
+}
+
+static void seat_handle_name(void *data, struct wl_seat *wl_seat,
+                             const char *name) {}
+
+static const struct wl_seat_listener seat_listener = {seat_handle_capabilities,
+                                                      seat_handle_name};
+
+// Update output mouse positions before rendering
+static void update_mouse_positions(struct swaybg_state *state) {
+  struct swaybg_output *output;
+  wl_list_for_each(output, &state->outputs, link) {
+    if (state->mouse_x >= 0 && state->mouse_y >= 0) { // Valid position
+      // Convert global coords to output-local normalized [0,1] range
+      output->mouse_x = (state->mouse_x - output->x) / (float)output->width;
+      output->mouse_y = (state->mouse_y - output->y) / (float)output->height;
+
+      // Clamp to output bounds
+      output->mouse_x = fmaxf(0.0f, fminf(1.0f, output->mouse_x));
+      output->mouse_y = fmaxf(0.0f, fminf(1.0f, output->mouse_y));
+    } else {
+      // Use center position when mouse not available
+      output->mouse_x = 0.5f;
+      output->mouse_y = 0.5f;
+    }
+  }
+}
 
 // Create a wl_buffer with the specified dimensions and content
 static struct wl_buffer *draw_buffer(const struct swaybg_output *output,
@@ -211,7 +312,8 @@ static void render_frame(struct swaybg_output *output) {
       }
 
       shader_render(output->shader_ctx, output->config->image->surface,
-                    output->shader_surface, time);
+                    output->shader_surface, time, output->mouse_x,
+                    output->mouse_y); // Pass mouse position
       render_surface = output->shader_surface;
 
       output->dirty = true;
@@ -268,6 +370,11 @@ static void destroy_swaybg_output_config(struct swaybg_output_config *config) {
 static void destroy_swaybg_output(struct swaybg_output *output) {
   if (!output) {
     return;
+  }
+
+  if (output->state->pointer) {
+    wl_pointer_release(output->state->pointer);
+    output->state->pointer = NULL;
   }
 
   if (output->shader_ctx) {
@@ -335,7 +442,9 @@ static void output_geometry(void *data, struct wl_output *output, int32_t x,
                             int32_t y, int32_t width_mm, int32_t height_mm,
                             int32_t subpixel, const char *make,
                             const char *model, int32_t transform) {
-  // Who cares
+  struct swaybg_output *swaybg_output = data;
+  swaybg_output->x = x;
+  swaybg_output->y = y;
 }
 
 static void output_mode(void *data, struct wl_output *output, uint32_t flags,
@@ -346,13 +455,6 @@ static void output_mode(void *data, struct wl_output *output, uint32_t flags,
 static void create_layer_surface(struct swaybg_output *output) {
   output->surface = wl_compositor_create_surface(output->state->compositor);
   assert(output->surface);
-
-  // Empty input region
-  struct wl_region *input_region =
-      wl_compositor_create_region(output->state->compositor);
-  assert(input_region);
-  wl_surface_set_input_region(output->surface, input_region);
-  wl_region_destroy(input_region);
 
   if (output->state->fract_scale_manager) {
     output->fract_scale = wp_fractional_scale_manager_v1_get_fractional_scale(
@@ -481,6 +583,12 @@ static void handle_global(void *data, struct wl_registry *registry,
         wl_registry_bind(registry, name, &wl_output_interface, 4);
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
+
+    // Initialize output mouse position to center
+    output->mouse_x = 0.5f;
+    output->mouse_y = 0.5f;
+    output->x = 0;
+    output->y = 0;
   } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
     state->layer_shell =
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
@@ -495,6 +603,9 @@ static void handle_global(void *data, struct wl_registry *registry,
              0) {
     state->fract_scale_manager = wl_registry_bind(
         registry, name, &wp_fractional_scale_manager_v1_interface, 1);
+  } else if (strcmp(interface, wl_seat_interface.name) == 0) {
+    state->seat = wl_registry_bind(registry, name, &wl_seat_interface, 4);
+    wl_seat_add_listener(state->seat, &seat_listener, state);
   }
 }
 
@@ -678,6 +789,10 @@ int main(int argc, char **argv) {
   wl_list_init(&state.images);
   gettimeofday(&state.start_time, NULL); // Initialize shader time
 
+  // Initialize mouse to invalid position
+  state.mouse_x = -1;
+  state.mouse_y = -1;
+
   parse_command_line(argc, argv, &state);
 
   // Load images
@@ -732,6 +847,8 @@ int main(int argc, char **argv) {
 
   state.run_display = true;
   while (state.run_display && wl_display_roundtrip(state.display) >= 0) {
+    update_mouse_positions(&state);
+
     // Send acks, and determine which images need to be loaded
     struct swaybg_output *output;
     wl_list_for_each(output, &state.outputs, link) {
@@ -767,6 +884,10 @@ int main(int argc, char **argv) {
   struct swaybg_image *tmp_image;
   wl_list_for_each_safe(image, tmp_image, &state.images, link) {
     destroy_swaybg_image(image);
+  }
+
+  if (state.seat) {
+    wl_seat_release(state.seat);
   }
 
   return 0;

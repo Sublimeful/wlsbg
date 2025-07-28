@@ -230,7 +230,8 @@ error:
 }
 
 void shader_render(shader_context *ctx, cairo_surface_t *input,
-                   cairo_surface_t *output, float time) {
+                   cairo_surface_t *output, float time, float mouse_x,
+                   float mouse_y) {
   if (!ctx || !input || !output)
     return;
 
@@ -253,9 +254,14 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   glUseProgram(ctx->program);
 
   // Set uniforms
-  GLint texLoc = glGetUniformLocation(ctx->program, "u_texture");
+  GLint texLoc = glGetUniformLocation(ctx->program, "iTexture");
   if (texLoc != -1) {
     glUniform1i(texLoc, 0);
+  }
+
+  GLint mouseLoc = glGetUniformLocation(ctx->program, "iMouse");
+  if (mouseLoc != -1) {
+    glUniform2f(mouseLoc, mouse_x, mouse_y);
   }
 
   GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
