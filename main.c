@@ -11,8 +11,7 @@
 #include <bits/getopt_core.h>
 #include <ctype.h>
 #include <getopt.h>
-#include <math.h>
-#include <stdbool.h>
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,7 +59,13 @@ struct swaybg_state {
   struct timeval start_time; // Track program start time for shaders
   struct wl_seat *seat;
   struct wl_pointer *pointer;
-  float mouse_x, mouse_y; // Track global mouse position
+  struct {
+    float x, y;           // Track global mouse position
+    float down_x, down_y; // mouse.xy - position during button down
+    float click_x,
+        click_y;  // abs(mouse.zw) - position during last click
+    bool is_down; // sign(mouse.z) - button is down
+  } mouse;
 };
 
 struct swaybg_image {
@@ -116,9 +121,14 @@ struct swaybg_output {
 // Add new listeners
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
-  struct swaybg_state *state = data;
-  state->mouse_x = wl_fixed_to_double(sx);
-  state->mouse_y = wl_fixed_to_double(sy);
+  struct swaybg_state *s = data;
+  s->mouse.x = wl_fixed_to_double(sx);
+  s->mouse.y = wl_fixed_to_double(sy);
+
+  if (s->mouse.is_down) {
+    s->mouse.down_x = s->mouse.x;
+    s->mouse.down_y = s->mouse.y;
+  }
 }
 
 static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
@@ -133,7 +143,17 @@ static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
 
 static void pointer_handle_button(void *data, struct wl_pointer *pointer,
                                   uint32_t serial, uint32_t time,
-                                  uint32_t button, uint32_t state) {}
+                                  uint32_t button, uint32_t state) {
+  struct swaybg_state *s = data;
+
+  if (button == BTN_LEFT) {
+    s->mouse.is_down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+    if (s->mouse.is_down) {
+      s->mouse.click_x = s->mouse.x;
+      s->mouse.click_y = s->mouse.y;
+    }
+  }
+}
 
 static void pointer_handle_axis(void *data, struct wl_pointer *pointer,
                                 uint32_t time, uint32_t axis,
@@ -191,14 +211,9 @@ static const struct wl_seat_listener seat_listener = {seat_handle_capabilities,
 static void update_mouse_positions(struct swaybg_state *state) {
   struct swaybg_output *output;
   wl_list_for_each(output, &state->outputs, link) {
-    if (state->mouse_x >= 0 && state->mouse_y >= 0) { // Valid position
-      // Convert global coords to output-local normalized [0,1] range
-      output->mouse_x = (state->mouse_x - output->x) / (float)output->width;
-      output->mouse_y = (state->mouse_y - output->y) / (float)output->height;
-
-      // Clamp to output bounds
-      output->mouse_x = fmaxf(0.0f, fminf(1.0f, output->mouse_x));
-      output->mouse_y = fmaxf(0.0f, fminf(1.0f, output->mouse_y));
+    if (state->mouse.x >= 0 && state->mouse.y >= 0) { // Valid position
+      output->mouse_x = state->mouse.x - output->x;
+      output->mouse_y = state->mouse.y - output->y;
     } else {
       // Use center position when mouse not available
       output->mouse_x = 0.5f;
@@ -313,7 +328,9 @@ static void render_frame(struct swaybg_output *output) {
 
       shader_render(output->shader_ctx, output->config->image->surface,
                     output->shader_surface, time, output->mouse_x,
-                    output->mouse_y); // Pass mouse position
+                    output->mouse_y, output->state->mouse.is_down,
+                    output->state->mouse.down_x, output->state->mouse.down_y,
+                    output->state->mouse.click_x, output->state->mouse.click_y);
       render_surface = output->shader_surface;
 
       output->dirty = true;
@@ -790,8 +807,14 @@ int main(int argc, char **argv) {
   gettimeofday(&state.start_time, NULL); // Initialize shader time
 
   // Initialize mouse to invalid position
-  state.mouse_x = -1;
-  state.mouse_y = -1;
+  state.mouse.x = -1;
+  state.mouse.y = -1;
+  // Reset mouse state
+  state.mouse.is_down = false;
+  state.mouse.down_x = 0.0f;
+  state.mouse.down_y = 0.0f;
+  state.mouse.click_x = 0.0f;
+  state.mouse.click_y = 0.0f;
 
   parse_command_line(argc, argv, &state);
 

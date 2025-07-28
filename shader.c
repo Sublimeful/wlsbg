@@ -2,9 +2,9 @@
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -231,7 +231,8 @@ error:
 
 void shader_render(shader_context *ctx, cairo_surface_t *input,
                    cairo_surface_t *output, float time, float mouse_x,
-                   float mouse_y) {
+                   float mouse_y, bool is_down, float down_x, float down_y,
+                   float click_x, float click_y) {
   if (!ctx || !input || !output)
     return;
 
@@ -259,9 +260,20 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
     glUniform1i(texLoc, 0);
   }
 
-  GLint mouseLoc = glGetUniformLocation(ctx->program, "iMouse");
-  if (mouseLoc != -1) {
-    glUniform2f(mouseLoc, mouse_x, mouse_y);
+  GLint mousePosLoc = glGetUniformLocation(ctx->program, "iMousePos");
+  if (mousePosLoc != -1) {
+    glUniform2f(mousePosLoc, mouse_x, mouse_y);
+  }
+
+  GLint mouseClickLoc = glGetUniformLocation(ctx->program, "iMouseClickPos");
+  if (mouseClickLoc != -1) {
+    glUniform2f(mouseClickLoc, click_x, click_y);
+  }
+
+  GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");
+  if (mouseDownLoc != -1) {
+    int sign = (is_down ? -1 : 1);
+    glUniform2f(mouseDownLoc, down_x * sign, down_y * sign);
   }
 
   GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
