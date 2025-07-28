@@ -121,10 +121,9 @@ static struct wl_buffer *draw_buffer(const struct swaybg_output *output,
     uint8_t r8 = (bg_color >> 24) & 0xFF;
     uint8_t g8 = (bg_color >> 16) & 0xFF;
     uint8_t b8 = (bg_color >> 8) & 0xFF;
-    uint32_t f = 0xFFFFFFFF / 0xFF; // division result is an integer
-    uint32_t r32 = r8 * f;
-    uint32_t g32 = g8 * f;
-    uint32_t b32 = b8 * f;
+    uint32_t r32 = (r8 << 24) | (r8 << 16) | (r8 << 8) | r8;
+    uint32_t g32 = (g8 << 24) | (g8 << 16) | (g8 << 8) | g8;
+    uint32_t b32 = (b8 << 24) | (b8 << 16) | (b8 << 8) | b8;
     return wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
         output->state->single_pixel_buffer_manager, r32, g32, b32, 0xFFFFFFFF);
   }
@@ -744,9 +743,8 @@ int main(int argc, char **argv) {
     }
 
     wl_list_for_each(output, &state.outputs, link) {
-      if (output->dirty && output->config->image == image) {
+      if (output->dirty) {
         output->dirty = false;
-        printf("Render\n");
         render_frame(output);
       }
     }

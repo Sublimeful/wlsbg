@@ -143,6 +143,8 @@ shader_context *shader_context_create(const char *shader_path, int width,
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
 
@@ -240,19 +242,9 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   int width = cairo_image_surface_get_width(input);
   int height = cairo_image_surface_get_height(input);
 
-  // Convert BGRA to RGBA
-  uint8_t *rgba_data = malloc(width * height * 4);
-  for (int i = 0; i < width * height; i++) {
-    rgba_data[i * 4 + 0] = data[i * 4 + 2]; // R
-    rgba_data[i * 4 + 1] = data[i * 4 + 1]; // G
-    rgba_data[i * 4 + 2] = data[i * 4 + 0]; // B
-    rgba_data[i * 4 + 3] = data[i * 4 + 3]; // A
-  }
-
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
-                  GL_UNSIGNED_BYTE, rgba_data);
-  free(rgba_data);
+                  GL_UNSIGNED_BYTE, data);
 
   // Render
   glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
