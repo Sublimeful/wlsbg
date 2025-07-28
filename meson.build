@@ -34,6 +34,9 @@ wayland_protos = dependency('wayland-protocols', version: '>=1.31')
 wayland_scanner = dependency('wayland-scanner', version: '>=1.14.91', native: true)
 cairo = dependency('cairo')
 gdk_pixbuf = dependency('gdk-pixbuf-2.0', required: get_option('gdk-pixbuf'))
+opengl_dep = dependency('gl')
+egl_dep = dependency('egl')
+glesv2_dep = dependency('glesv2')
 
 git = find_program('git', required: false, native: true)
 scdoc = find_program('scdoc', required: get_option('man-pages'), native: true)
@@ -95,6 +98,7 @@ executable(
 		'log.c',
 		'main.c',
 		'pool-buffer.c',
+        'shader.c',
 		protos_src,
 	],
 	include_directories: 'include',
@@ -103,6 +107,9 @@ executable(
 		rt,
 		gdk_pixbuf,
 		wayland_client,
+        opengl_dep,
+        egl_dep,
+        glesv2_dep,
 	],
 	install: true
 )
