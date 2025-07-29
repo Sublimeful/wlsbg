@@ -59,6 +59,8 @@ struct swaybg_state {
   struct timeval start_time; // Track program start time for shaders
   struct wl_seat *seat;
   struct wl_pointer *pointer;
+  unsigned int frame_rate;
+  long long unsigned int frame_time;
 
   // Track mouse positions globally
   struct {
@@ -703,6 +705,7 @@ static void parse_command_line(int argc, char **argv,
                                struct swaybg_state *state) {
   static struct option long_options[] = {
       {"color", required_argument, NULL, 'c'},
+      {"fps", required_argument, NULL, 'f'},
       {"help", no_argument, NULL, 'h'},
       {"image", required_argument, NULL, 'i'},
       {"layer", required_argument, NULL, 'l'},
@@ -716,13 +719,14 @@ static void parse_command_line(int argc, char **argv,
       "Usage: swaybg <options...>\n"
       "\n"
       "  -c, --color RRGGBB     Set the background color.\n"
+      "  -f, --fps <int>        FPS of the shader.\n"
       "  -h, --help             Show help message and quit.\n"
       "  -i, --image <path>     Set the image to display.\n"
-      "  -l, --layer <layer>      Set the layer to use: background, bottom, "
+      "  -l, --layer <layer>    Set the layer to use: background, bottom, "
       "top, overlay\n"
       "  -m, --mode <mode>      Set the mode to use for the image.\n"
       "  -o, --output <name>    Set the output to operate on or * for all.\n"
-      "  -s, --shader <path>      Apply GLSL shader to wallpaper\n"
+      "  -s, --shader <path>    Apply GLSL shader to wallpaper\n"
       "  -v, --version          Show the version number and quit.\n"
       "\n"
       "Background Modes:\n"
@@ -737,7 +741,8 @@ static void parse_command_line(int argc, char **argv,
   int c;
   while (1) {
     int option_index = 0;
-    c = getopt_long(argc, argv, "c:hi:l:m:o:s:v", long_options, &option_index);
+    c = getopt_long(argc, argv, "c:f:hi:l:m:o:s:v", long_options,
+                    &option_index);
     if (c == -1) {
       break;
     }
@@ -750,6 +755,13 @@ static void parse_command_line(int argc, char **argv,
                    optarg);
         continue;
       }
+      break;
+    case 'f':
+      state->frame_rate = atoi(optarg);
+      if (state->frame_rate == 0) {
+        state->frame_rate = 60; // Default 60 fps
+      }
+      state->frame_time = 1.0 / state->frame_rate * 1E9;
       break;
     case 'i': // image
       config->image_path = optarg;
@@ -837,6 +849,10 @@ int main(int argc, char **argv) {
   wl_list_init(&state.images);
   gettimeofday(&state.start_time, NULL); // Initialize shader time
 
+  // Initialize frame rate
+  state.frame_rate = 60;
+  state.frame_time = 1.0 / state.frame_rate * 1E9;
+
   // Initialize mouse positions to invalid position
   state.mouse.x = -1;
   state.mouse.y = -1;
@@ -848,6 +864,9 @@ int main(int argc, char **argv) {
   state.mouse.is_clicked = false;
 
   parse_command_line(argc, argv, &state);
+
+  printf("Frame rate: %u\n", state.frame_rate);
+  printf("Frame time: %llu\n", state.frame_time);
 
   // Load images
   struct swaybg_image *image;
@@ -924,7 +943,7 @@ int main(int argc, char **argv) {
     state.mouse.is_clicked = false;
 
     // Limit to 60 FPS
-    struct timespec sleep_time = {.tv_nsec = 166666};
+    struct timespec sleep_time = {.tv_nsec = state.frame_time};
     nanosleep(&sleep_time, NULL);
   }
 

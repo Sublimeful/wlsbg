@@ -265,25 +265,16 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
     glUniform2f(mousePosLoc, mouse_x, mouse_y);
   }
 
-  printf("Mouse x: %f\n", mouse_x);
-  printf("Mouse y: %f\n", mouse_y);
-  printf("Mouse down x: %f\n", down_x);
-  printf("Mouse down y: %f\n", down_y);
-  printf("Mouse clicked x: %f\n", click_x);
-  printf("Mouse clicked y: %f\n", click_y);
-  printf("Is down: %s\n", is_down ? "Yes" : "No");
-  printf("Is clicked: %s\n", is_clicked ? "Yes" : "No");
+  GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");
+  if (mouseDownLoc != -1) {
+    int sign = (is_down ? -1 : 1);
+    glUniform2f(mouseDownLoc, down_x * sign, down_y * sign);
+  }
 
   GLint mouseClickLoc = glGetUniformLocation(ctx->program, "iMouseClickPos");
   if (mouseClickLoc != -1) {
     int sign = (is_clicked ? -1 : 1);
     glUniform2f(mouseClickLoc, click_x * sign, click_y * sign);
-  }
-
-  GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");
-  if (mouseDownLoc != -1) {
-    int sign = (is_down ? -1 : 1);
-    glUniform2f(mouseDownLoc, down_x * sign, down_y * sign);
   }
 
   GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
