@@ -134,8 +134,8 @@ struct swaybg_output {
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
   struct swaybg_state *s = data;
-  s->mouse.x = wl_fixed_to_double(sx);
-  s->mouse.y = wl_fixed_to_double(sy);
+  s->mouse.x = wl_fixed_to_double(2 * sx);
+  s->mouse.y = wl_fixed_to_double(2 * sy);
 
   if (s->mouse.is_down) {
     s->mouse.down_x = s->mouse.x;
