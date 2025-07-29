@@ -1,5 +1,6 @@
 #include "shader.h"
 #include <EGL/egl.h>
+#include <GL/gl.h>
 #include <GLES3/gl3.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -152,7 +153,7 @@ shader_context *shader_context_create(const char *shader_path, int width,
   // Create fragment_src
   char *fragment_preamble = "#version 320 es\n"
                             "precision highp float;\n"
-                            "int iTexture = 0;\n"
+                            "uniform sampler2D iTexture;\n"
                             "layout(std140, binding = 0) uniform ShaderData {\n"
                             "    vec3 iResolution;\n"
                             "    float iTime;\n"
@@ -269,6 +270,8 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   int out_height = cairo_image_surface_get_height(output);
 
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ctx->width, ctx->height, GL_RGBA,
                   GL_UNSIGNED_BYTE, data);
 
@@ -280,6 +283,12 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
 
   // Use program
   glUseProgram(ctx->program);
+
+  // Set uniforms
+  GLint texLoc = glGetUniformLocation(ctx->program, "iTexture");
+  if (texLoc != -1) {
+    glUniform1i(texLoc, 0);
+  }
 
   // Create UBO data structure
   typedef struct {
@@ -310,7 +319,7 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
 
   // Read back to output surface
   unsigned char *out_data = cairo_image_surface_get_data(output);
-  glReadPixels(0, 0, out_width, out_height, GL_RGBA, GL_UNSIGNED_BYTE,
+  glReadPixels(0, 0, out_width, out_height, GL_BGRA, GL_UNSIGNED_BYTE,
                out_data);
 
   // Synchronize GPU operations

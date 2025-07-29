@@ -328,9 +328,9 @@ static void render_frame(struct swaybg_output *output) {
   if (output->config->shader_path) {
     struct timespec now;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
-    long seconds = now.tv_sec - output->state->start_time.tv_sec + 1000;
+    long seconds = now.tv_sec - output->state->start_time.tv_sec;
     long nanoseconds = now.tv_nsec - output->state->start_time.tv_nsec;
-    time = seconds + nanoseconds / 1E9;
+    time = (seconds % 86400) + nanoseconds / 1E9;
   }
 
   // Process shader if needed
