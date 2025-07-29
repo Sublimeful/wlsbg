@@ -3,6 +3,7 @@
 #include <GLES3/gl3.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -85,24 +86,9 @@ shader_context *shader_context_create(const char *shader_path, int width,
   }
 
   // Choose config
-  const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
-                                   EGL_OPENGL_ES3_BIT,
-                                   EGL_SURFACE_TYPE,
-                                   EGL_PBUFFER_BIT,
-                                   EGL_RED_SIZE,
-                                   8,
-                                   EGL_GREEN_SIZE,
-                                   8,
-                                   EGL_BLUE_SIZE,
-                                   8,
-                                   EGL_ALPHA_SIZE,
-                                   8,
-                                   EGL_NONE};
-
   EGLConfig config;
   EGLint num_configs;
-  if (!eglChooseConfig(ctx->display, config_attribs, &config, 1,
-                       &num_configs) ||
+  if (!eglChooseConfig(ctx->display, NULL, &config, 1, &num_configs) ||
       num_configs == 0) {
     fprintf(stderr, "Failed to choose EGL config\n");
     goto error;
@@ -141,10 +127,6 @@ shader_context *shader_context_create(const char *shader_path, int width,
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
 
@@ -204,8 +186,13 @@ shader_context *shader_context_create(const char *shader_path, int width,
   }
 
   // Set up vertex data
-  GLfloat vertices[] = {-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-                        -1.0f, 1.0f,  0.0f, 1.0f, 1.0f, 1.0f,  1.0f, 1.0f};
+  GLfloat vertices[] = {
+      // x,    y,     u,    v (flipped vertically)
+      -1.0f, -1.0f, 0.0f, 1.0f, // Bottom-left
+      1.0f,  -1.0f, 1.0f, 1.0f, // Bottom-right
+      -1.0f, 1.0f,  0.0f, 0.0f, // Top-left
+      1.0f,  1.0f,  1.0f, 0.0f  // Top-right
+  };
 
   glGenVertexArrays(1, &ctx->vao);
   glGenBuffers(1, &ctx->vbo);
@@ -241,23 +228,27 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
 
   // Update texture with input surface
   unsigned char *data = cairo_image_surface_get_data(input);
-  int width = cairo_image_surface_get_width(input);
-  int height = cairo_image_surface_get_height(input);
+  int out_width = cairo_image_surface_get_width(output);
+  int out_height = cairo_image_surface_get_height(output);
 
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA,
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ctx->width, ctx->height, GL_RGBA,
                   GL_UNSIGNED_BYTE, data);
 
   // Render
-  glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-  glViewport(0, 0, width, height);
-
   glUseProgram(ctx->program);
 
   // Set uniforms
   GLint texLoc = glGetUniformLocation(ctx->program, "iTexture");
   if (texLoc != -1) {
     glUniform1i(texLoc, 0);
+  }
+
+  GLint mouseLoc = glGetUniformLocation(ctx->program, "iMouse");
+  if (mouseLoc != -1) {
+    float z = is_down ? click_x : -click_x;
+    float w = is_clicked ? click_y : -click_y;
+    glUniform4f(mouseLoc, down_x, down_y, z, w);
   }
 
   GLint mousePosLoc = glGetUniformLocation(ctx->program, "iMousePos");
@@ -267,19 +258,22 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
 
   GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");
   if (mouseDownLoc != -1) {
-    int sign = (is_down ? -1 : 1);
-    glUniform2f(mouseDownLoc, down_x * sign, down_y * sign);
+    float x = is_down ? down_x : -down_x;
+    float y = is_down ? down_y : -down_y;
+    glUniform2f(mouseDownLoc, x, y);
   }
 
   GLint mouseClickLoc = glGetUniformLocation(ctx->program, "iMouseClickPos");
   if (mouseClickLoc != -1) {
-    int sign = (is_clicked ? -1 : 1);
-    glUniform2f(mouseClickLoc, click_x * sign, click_y * sign);
+    int x = is_clicked ? click_x : -click_x;
+    int y = is_clicked ? click_y : -click_y;
+    glUniform2f(mouseClickLoc, x, y);
   }
 
   GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
   if (resLoc != -1) {
-    glUniform2f(resLoc, (float)width, (float)height);
+    float aspect_ratio = (float)out_width / out_height;
+    glUniform3f(resLoc, out_width, out_height, aspect_ratio);
   }
 
   GLint timeLoc = glGetUniformLocation(ctx->program, "iTime");
@@ -287,29 +281,13 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
     glUniform1f(timeLoc, time);
   }
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, ctx->texture);
-
   glBindVertexArray(ctx->vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   // Read back to output surface
   unsigned char *out_data = cairo_image_surface_get_data(output);
-  int out_width = cairo_image_surface_get_width(output);
-  int out_height = cairo_image_surface_get_height(output);
-
-  uint8_t *readback = malloc(out_width * out_height * 4);
   glReadPixels(0, 0, out_width, out_height, GL_RGBA, GL_UNSIGNED_BYTE,
-               readback);
-
-  // Convert RGBA to BGRA
-  for (int i = 0; i < out_width * out_height; i++) {
-    out_data[i * 4 + 0] = readback[i * 4 + 2]; // B
-    out_data[i * 4 + 1] = readback[i * 4 + 1]; // G
-    out_data[i * 4 + 2] = readback[i * 4 + 0]; // R
-    out_data[i * 4 + 3] = readback[i * 4 + 3]; // A
-  }
-  free(readback);
+               out_data);
 
   cairo_surface_mark_dirty(output);
 }
