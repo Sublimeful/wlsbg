@@ -209,11 +209,11 @@ shader_context *shader_context_create(const char *shader_path, int width,
 
   // Set up vertex data
   GLfloat vertices[] = {
-      // x,    y,     u,    v (flipped vertically)
-      -1.0f, -1.0f, 0.0f, 1.0f, // Bottom-left
-      1.0f,  -1.0f, 1.0f, 1.0f, // Bottom-right
-      -1.0f, 1.0f,  0.0f, 0.0f, // Top-left
-      1.0f,  1.0f,  1.0f, 0.0f  // Top-right
+      // x,    y,     u,    v
+      -1.0f, -1.0f, 0.0f, 0.0f, // Bottom-left
+      1.0f,  -1.0f, 1.0f, 0.0f, // Bottom-right
+      -1.0f, 1.0f,  0.0f, 1.0f, // Top-left
+      1.0f,  1.0f,  1.0f, 1.0f  // Top-right
   };
 
   glGenVertexArrays(1, &ctx->vao);

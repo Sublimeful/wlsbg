@@ -134,8 +134,8 @@ struct swaybg_output {
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
   struct swaybg_state *s = data;
-  s->mouse.x = wl_fixed_to_double(2 * sx);
-  s->mouse.y = wl_fixed_to_double(2 * sy);
+  s->mouse.x = wl_fixed_to_double(sx * 2);
+  s->mouse.y = wl_fixed_to_double(sy * 2);
 
   if (s->mouse.is_down) {
     s->mouse.down_x = s->mouse.x;
@@ -164,6 +164,8 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
       s->mouse.is_clicked = true;
       s->mouse.click_x = s->mouse.x;
       s->mouse.click_y = s->mouse.y;
+      s->mouse.down_x = s->mouse.x;
+      s->mouse.down_y = s->mouse.y;
     } else {
       s->mouse.is_clicked = false;
     }
