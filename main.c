@@ -233,9 +233,9 @@ static void normalize_mouse_position(float input_mouse_x, float input_mouse_y,
     *output_mouse_x = input_mouse_x - output_x;
     *output_mouse_y = input_mouse_y - output_y;
   } else {
-    // Use invalid position when mouse not available
-    *output_mouse_x = -1;
-    *output_mouse_y = -1;
+    // Set mouse position to 0 when mouse not available
+    *output_mouse_x = 0;
+    *output_mouse_y = 0;
   }
 }
 
@@ -634,16 +634,16 @@ static void handle_global(void *data, struct wl_registry *registry,
         wl_registry_bind(registry, name, &wl_output_interface, 4);
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
-
+    // Initialize output position to 0
     output->x = 0;
     output->y = 0;
-    // Initialize output mouse positions to invalid positions
-    output->mouse.x = -1;
-    output->mouse.y = -1;
-    output->mouse.down_x = -1;
-    output->mouse.down_y = -1;
-    output->mouse.click_x = -1;
-    output->mouse.click_y = -1;
+    // Initialize mouse positions to 0
+    output->mouse.x = 0;
+    output->mouse.y = 0;
+    output->mouse.down_x = 0;
+    output->mouse.down_y = 0;
+    output->mouse.click_x = 0;
+    output->mouse.click_y = 0;
   } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
     state->layer_shell =
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
@@ -859,13 +859,13 @@ int main(int argc, char **argv) {
   state.frame_rate = 60;
   state.frame_time = 1.0 / state.frame_rate * 1E9;
 
-  // Initialize mouse positions to invalid position
-  state.mouse.x = -1;
-  state.mouse.y = -1;
-  state.mouse.down_x = -1;
-  state.mouse.down_y = -1;
-  state.mouse.click_x = -1;
-  state.mouse.click_y = -1;
+  // Initialize mouse positions to 0
+  state.mouse.x = 0;
+  state.mouse.y = 0;
+  state.mouse.down_x = 0;
+  state.mouse.down_y = 0;
+  state.mouse.click_x = 0;
+  state.mouse.click_y = 0;
   state.mouse.is_down = false;
   state.mouse.is_clicked = false;
 
