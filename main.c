@@ -1,4 +1,5 @@
 #include "background-image.h"
+#include "cairo.h"
 #include "cairo_util.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "log.h"
@@ -16,7 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <sys/time.h>
+#include <time.h>
+#include <wayland-client-core.h>
 #include <wayland-client.h>
 
 /*
@@ -56,7 +58,7 @@ struct swaybg_state {
   struct wl_list outputs; // struct swaybg_output::link
   struct wl_list images;  // struct swaybg_image::link
   bool run_display;
-  struct timeval start_time; // Track program start time for shaders
+  struct timespec start_time; // Track program start time for shaders
   struct wl_seat *seat;
   struct wl_pointer *pointer;
   unsigned int frame_rate;
@@ -322,12 +324,13 @@ static void render_frame(struct swaybg_output *output) {
   get_buffer_size(output, &buffer_width, &buffer_height);
 
   // Calculate elapsed time for shaders
-  float time = 0.0f;
+  double time = 0.0f;
   if (output->config->shader_path) {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    time = (now.tv_sec - output->state->start_time.tv_sec) +
-           (now.tv_usec - output->state->start_time.tv_usec) / 1000000.0f;
+    struct timespec now;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+    long seconds = now.tv_sec - output->state->start_time.tv_sec + 1000;
+    long nanoseconds = now.tv_nsec - output->state->start_time.tv_nsec;
+    time = seconds + nanoseconds / 1E9;
   }
 
   // Process shader if needed
@@ -847,7 +850,8 @@ int main(int argc, char **argv) {
   wl_list_init(&state.configs);
   wl_list_init(&state.outputs);
   wl_list_init(&state.images);
-  gettimeofday(&state.start_time, NULL); // Initialize shader time
+  clock_gettime(CLOCK_PROCESS_CPUTIME_ID,
+                &state.start_time); // Initialize shader time
 
   // Initialize frame rate
   state.frame_rate = 60;
@@ -919,7 +923,7 @@ int main(int argc, char **argv) {
   }
 
   state.run_display = true;
-  while (state.run_display && wl_display_roundtrip(state.display) >= 0) {
+  while (wl_display_dispatch(state.display) != -1 && state.run_display) {
     update_mouse_positions(&state);
 
     // Send acks, and determine which images need to be loaded
@@ -959,11 +963,16 @@ int main(int argc, char **argv) {
 
   struct swaybg_image *tmp_image;
   wl_list_for_each_safe(image, tmp_image, &state.images, link) {
+    cairo_surface_destroy(image->surface);
     destroy_swaybg_image(image);
   }
 
   if (state.seat) {
     wl_seat_release(state.seat);
+  }
+
+  if (state.display) {
+    wl_display_disconnect(state.display);
   }
 
   return 0;

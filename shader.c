@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -18,6 +19,7 @@ typedef struct shader_context {
   GLuint fbo;
   GLuint vao;
   GLuint vbo;
+  GLuint ubo;
   int width;
   int height;
 } shader_context;
@@ -142,12 +144,29 @@ shader_context *shader_context_create(const char *shader_path, int width,
   }
 
   // Load and compile shaders
-  char *fragment_src = load_file(shader_path);
-  if (!fragment_src) {
+  char *shader_contents = load_file(shader_path);
+  if (!shader_contents) {
     goto error;
   }
 
-  const char *vertex_src = "#version 300 es\n"
+  // Create fragment_src
+  char *fragment_preamble = "#version 320 es\n"
+                            "precision highp float;\n"
+                            "int iTexture = 0;\n"
+                            "layout(std140, binding = 0) uniform ShaderData {\n"
+                            "    vec3 iResolution;\n"
+                            "    float iTime;\n"
+                            "    vec4 iMouse;\n"
+                            "    vec2 iMousePos;\n"
+                            "};\n";
+  unsigned int fragment_length =
+      strlen(fragment_preamble) + strlen(shader_contents) + 1;
+  char *fragment_src = (char *)malloc(sizeof(char) * fragment_length);
+  strcpy(fragment_src, fragment_preamble);
+  strcat(fragment_src, shader_contents);
+  free(shader_contents);
+
+  const char *vertex_src = "#version 320 es\n"
                            "layout(location=0) in vec4 position;\n"
                            "layout(location=1) in vec2 texCoord;\n"
                            "out vec2 vTexCoord;\n"
@@ -158,6 +177,8 @@ shader_context *shader_context_create(const char *shader_path, int width,
 
   GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_src);
   GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+
+  // Free fragment_src
   free(fragment_src);
 
   if (!vertex_shader || !fragment_shader) {
@@ -209,6 +230,18 @@ shader_context *shader_context_create(const char *shader_path, int width,
                         (void *)(2 * sizeof(GLfloat)));
   glEnableVertexAttribArray(1);
 
+  // Create UBO
+  glGenBuffers(1, &ctx->ubo);
+  glBindBuffer(GL_UNIFORM_BUFFER, ctx->ubo);
+  glBufferData(GL_UNIFORM_BUFFER, 64, NULL, GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+  // Bind uniform block
+  GLuint block_index = glGetUniformBlockIndex(ctx->program, "ShaderData");
+  if (block_index != GL_INVALID_INDEX) {
+    glUniformBlockBinding(ctx->program, block_index, 0);
+  }
+
   return ctx;
 
 error:
@@ -217,7 +250,7 @@ error:
 }
 
 void shader_render(shader_context *ctx, cairo_surface_t *input,
-                   cairo_surface_t *output, float time, float mouse_x,
+                   cairo_surface_t *output, double time, float mouse_x,
                    float mouse_y, float down_x, float down_y, float click_x,
                    float click_y, bool is_down, bool is_clicked) {
   if (!ctx || !input || !output)
@@ -225,6 +258,10 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
 
   // Make context current
   eglMakeCurrent(ctx->display, ctx->surface, ctx->surface, ctx->context);
+
+  // Clear any existing errors
+  while (glGetError() != GL_NO_ERROR)
+    ;
 
   // Update texture with input surface
   unsigned char *data = cairo_image_surface_get_data(input);
@@ -235,51 +272,38 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ctx->width, ctx->height, GL_RGBA,
                   GL_UNSIGNED_BYTE, data);
 
-  // Render
+  // Check for texture update errors
+  GLenum err = glGetError();
+  if (err != GL_NO_ERROR) {
+    fprintf(stderr, "Texture update error: 0x%x\n", err);
+  }
+
+  // Use program
   glUseProgram(ctx->program);
 
-  // Set uniforms
-  GLint texLoc = glGetUniformLocation(ctx->program, "iTexture");
-  if (texLoc != -1) {
-    glUniform1i(texLoc, 0);
-  }
+  // Create UBO data structure
+  typedef struct {
+    float resolution[3];
+    float time;
+    float mouse[4];
+    float mouse_pos[2];
+    float padding[6]; // Pad to 64 bytes
+  } ShaderData;
 
-  GLint mouseLoc = glGetUniformLocation(ctx->program, "iMouse");
-  if (mouseLoc != -1) {
-    float z = is_down ? click_x : -click_x;
-    float w = is_clicked ? click_y : -click_y;
-    glUniform4f(mouseLoc, down_x, down_y, z, w);
-  }
+  ShaderData shader_data = {.resolution = {(float)out_width, (float)out_height,
+                                           (float)out_width / out_height},
+                            .time = (float)time,
+                            .mouse = {down_x, down_y,
+                                      is_down ? click_x : -click_x,
+                                      is_clicked ? click_y : -click_y},
+                            .mouse_pos = {mouse_x, mouse_y},
+                            .padding = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}};
 
-  GLint mousePosLoc = glGetUniformLocation(ctx->program, "iMousePos");
-  if (mousePosLoc != -1) {
-    glUniform2f(mousePosLoc, mouse_x, mouse_y);
-  }
-
-  GLint mouseDownLoc = glGetUniformLocation(ctx->program, "iMouseDownPos");
-  if (mouseDownLoc != -1) {
-    float x = is_down ? down_x : -down_x;
-    float y = is_down ? down_y : -down_y;
-    glUniform2f(mouseDownLoc, x, y);
-  }
-
-  GLint mouseClickLoc = glGetUniformLocation(ctx->program, "iMouseClickPos");
-  if (mouseClickLoc != -1) {
-    int x = is_clicked ? click_x : -click_x;
-    int y = is_clicked ? click_y : -click_y;
-    glUniform2f(mouseClickLoc, x, y);
-  }
-
-  GLint resLoc = glGetUniformLocation(ctx->program, "iResolution");
-  if (resLoc != -1) {
-    float aspect_ratio = (float)out_width / out_height;
-    glUniform3f(resLoc, out_width, out_height, aspect_ratio);
-  }
-
-  GLint timeLoc = glGetUniformLocation(ctx->program, "iTime");
-  if (timeLoc != -1) {
-    glUniform1f(timeLoc, time);
-  }
+  // Update UBO
+  glBindBuffer(GL_UNIFORM_BUFFER, ctx->ubo);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ShaderData), &shader_data);
+  glBindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->ubo);
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
   glBindVertexArray(ctx->vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -288,6 +312,15 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   unsigned char *out_data = cairo_image_surface_get_data(output);
   glReadPixels(0, 0, out_width, out_height, GL_RGBA, GL_UNSIGNED_BYTE,
                out_data);
+
+  // Synchronize GPU operations
+  glFinish();
+
+  // Check for read errors
+  err = glGetError();
+  if (err != GL_NO_ERROR) {
+    fprintf(stderr, "ReadPixels error: 0x%x\n", err);
+  }
 
   cairo_surface_mark_dirty(output);
 }
