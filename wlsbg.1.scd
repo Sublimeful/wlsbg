@@ -53,7 +53,7 @@ these options.
 			sign(mouze.w) = button is clicked
 		_iMousePos_ - vec2, real time position of the mouse
 	There is also the input vTexCoord, which maps to the texture coordinates of the input image.
-	See example shaders in the Github <https://github.com/Sublimeful/wlsbg>.
+	See example shaders by visiting the Github at <https://github.com/Sublimeful/wlsbg/tree/master/examples>.
 
 *-v, --version*
 	Show the version number and quit.
