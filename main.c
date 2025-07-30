@@ -871,9 +871,6 @@ int main(int argc, char **argv) {
 
   parse_command_line(argc, argv, &state);
 
-  printf("Frame rate: %u\n", state.frame_rate);
-  printf("Frame time: %llu\n", state.frame_time);
-
   // Load images
   struct swaybg_image *image;
   struct swaybg_output_config *config;
