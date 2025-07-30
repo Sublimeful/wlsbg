@@ -1,11 +1,23 @@
 #ifndef SHADER_H
 #define SHADER_H
 
+#include <EGL/egl.h>
+#include <GL/gl.h>
 #include <cairo.h>
 #include <stdbool.h>
 
-// Opaque shader context
-typedef struct shader_context shader_context;
+typedef struct shader_context {
+  EGLDisplay display;
+  EGLSurface surface;
+  EGLContext context;
+  GLuint program;
+  GLuint texture;
+  GLuint vao;
+  GLuint vbo;
+  GLuint ubo;
+  int width;
+  int height;
+} shader_context;
 
 shader_context *shader_context_create(const char *shader_path, int width,
                                       int height);

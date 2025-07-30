@@ -11,20 +11,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-typedef struct shader_context {
-  EGLDisplay display;
-  EGLSurface surface;
-  EGLContext context;
-  GLuint program;
-  GLuint texture;
-  GLuint fbo;
-  GLuint vao;
-  GLuint vbo;
-  GLuint ubo;
-  int width;
-  int height;
-} shader_context;
-
 // Function to load a file into memory
 static char *load_file(const char *path) {
   FILE *file = fopen(path, "rb");
@@ -132,17 +118,6 @@ shader_context *shader_context_create(const char *shader_path, int width,
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
-
-  // Create FBO
-  glGenFramebuffers(1, &ctx->fbo);
-  glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                         ctx->texture, 0);
-
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    fprintf(stderr, "Framebuffer incomplete\n");
-    goto error;
-  }
 
   // Load and compile shaders
   char *shader_contents = load_file(shader_path);
@@ -270,9 +245,7 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
   int out_height = cairo_image_surface_get_height(output);
 
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ctx->width, ctx->height, GL_RGBA,
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ctx->width, ctx->height, GL_BGRA,
                   GL_UNSIGNED_BYTE, data);
 
   // Check for texture update errors
@@ -296,7 +269,7 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
     float time;
     float mouse[4];
     float mouse_pos[2];
-    float padding[6]; // Pad to 64 bytes
+    float padding[2]; // Ensure 16-byte alignment
   } ShaderData;
 
   ShaderData shader_data = {.resolution = {(float)out_width, (float)out_height,
@@ -306,7 +279,7 @@ void shader_render(shader_context *ctx, cairo_surface_t *input,
                                       is_down ? click_x : -click_x,
                                       is_clicked ? click_y : -click_y},
                             .mouse_pos = {mouse_x, mouse_y},
-                            .padding = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}};
+                            .padding = {0.0f, 0.0f}};
 
   // Update UBO
   glBindBuffer(GL_UNIFORM_BUFFER, ctx->ubo);
@@ -359,10 +332,6 @@ void shader_context_destroy(shader_context *ctx) {
 
   if (ctx->texture) {
     glDeleteTextures(1, &ctx->texture);
-  }
-
-  if (ctx->fbo) {
-    glDeleteFramebuffers(1, &ctx->fbo);
   }
 
   if (ctx->vao) {

@@ -128,6 +128,10 @@ struct wlsbg_output {
     float down_x, down_y;   // position during button down
     float click_x, click_y; // position during last click
   } mouse;
+
+  // Buffer caching
+  struct wl_buffer *cached_buffer;
+  uint32_t cached_width, cached_height;
 };
 
 // Add new listeners
@@ -243,14 +247,17 @@ static void normalize_mouse_position(float input_mouse_x, float input_mouse_y,
 static void update_mouse_positions(struct wlsbg_state *state) {
   struct wlsbg_output *output;
   wl_list_for_each(output, &state->outputs, link) {
-    normalize_mouse_position(state->mouse.x, state->mouse.y, &output->mouse.x,
-                             &output->mouse.y, output->x, output->y);
-    normalize_mouse_position(state->mouse.down_x, state->mouse.down_y,
-                             &output->mouse.down_x, &output->mouse.down_y,
-                             output->x, output->y);
-    normalize_mouse_position(state->mouse.click_x, state->mouse.click_y,
-                             &output->mouse.click_x, &output->mouse.click_y,
-                             output->x, output->y);
+    // Only update mouse positions for outputs that actually use shaders
+    if (output->config->shader_path) {
+      normalize_mouse_position(state->mouse.x, state->mouse.y, &output->mouse.x,
+                               &output->mouse.y, output->x, output->y);
+      normalize_mouse_position(state->mouse.down_x, state->mouse.down_y,
+                               &output->mouse.down_x, &output->mouse.down_y,
+                               output->x, output->y);
+      normalize_mouse_position(state->mouse.click_x, state->mouse.click_y,
+                               &output->mouse.click_x, &output->mouse.click_y,
+                               output->x, output->y);
+    }
   }
 }
 
@@ -339,53 +346,71 @@ static void render_frame(struct wlsbg_output *output) {
   cairo_surface_t *render_surface = NULL;
   if (output->config->shader_path && output->config->image &&
       output->config->image->surface) {
-    if (!output->shader_ctx) {
+    bool needs_new_context = !output->shader_ctx;
+    if (output->shader_ctx) {
+      int current_width =
+          cairo_image_surface_get_width(output->config->image->surface);
+      int current_height =
+          cairo_image_surface_get_height(output->config->image->surface);
+      needs_new_context = (current_width != output->shader_ctx->width ||
+                           current_height != output->shader_ctx->height);
+    }
+
+    if (needs_new_context) {
+      if (output->shader_ctx) {
+        shader_context_destroy(output->shader_ctx);
+      }
       output->shader_ctx = shader_context_create(
           output->config->shader_path,
           cairo_image_surface_get_width(output->config->image->surface),
           cairo_image_surface_get_height(output->config->image->surface));
     }
 
-    if (output->shader_ctx) {
-      if (!output->shader_surface ||
-          cairo_image_surface_get_width(output->shader_surface) !=
-              (int)buffer_width ||
-          cairo_image_surface_get_height(output->shader_surface) !=
-              (int)buffer_height) {
-        if (output->shader_surface) {
-          cairo_surface_destroy(output->shader_surface);
-        }
-        output->shader_surface = cairo_image_surface_create(
-            CAIRO_FORMAT_ARGB32, buffer_width, buffer_height);
+    if (!output->shader_surface ||
+        cairo_image_surface_get_width(output->shader_surface) !=
+            (int)buffer_width ||
+        cairo_image_surface_get_height(output->shader_surface) !=
+            (int)buffer_height) {
+      if (output->shader_surface) {
+        cairo_surface_destroy(output->shader_surface);
       }
-
-      shader_render(output->shader_ctx, output->config->image->surface,
-                    output->shader_surface, time, output->mouse.x,
-                    output->mouse.y, output->mouse.down_x, output->mouse.down_y,
-                    output->mouse.click_x, output->mouse.click_y,
-                    output->state->mouse.is_down,
-                    output->state->mouse.is_clicked);
-      render_surface = output->shader_surface;
-
-      output->dirty = true;
+      output->shader_surface = cairo_image_surface_create(
+          CAIRO_FORMAT_ARGB32, buffer_width, buffer_height);
     }
+
+    shader_render(output->shader_ctx, output->config->image->surface,
+                  output->shader_surface, time, output->mouse.x,
+                  output->mouse.y, output->mouse.down_x, output->mouse.down_y,
+                  output->mouse.click_x, output->mouse.click_y,
+                  output->state->mouse.is_down,
+                  output->state->mouse.is_clicked);
+
+    render_surface = output->shader_surface;
+
+    output->dirty = true;
   } else if (output->config->image && output->config->image->surface) {
     render_surface = output->config->image->surface;
   }
 
   struct wl_buffer *buf = NULL;
-  if (buffer_width != output->buffer_width ||
-      buffer_height != output->buffer_height || output->dirty) {
-    buf = draw_buffer(output, render_surface, buffer_width, buffer_height);
-    if (!buf) {
-      return;
-    }
+  if (buffer_width == output->cached_width &&
+      buffer_height == output->cached_height && output->cached_buffer &&
+      !output->config->shader_path) {
 
+    buf = output->cached_buffer;
+  } else {
+    if (output->cached_buffer) {
+      wl_buffer_destroy(output->cached_buffer);
+    }
+    buf = draw_buffer(output, render_surface, buffer_width, buffer_height);
+    output->cached_buffer = buf;
+    output->cached_width = buffer_width;
+    output->cached_height = buffer_height;
+  }
+  if (buf) {
     wl_surface_attach(output->surface, buf, 0, 0);
     wl_surface_damage_buffer(output->surface, 0, 0, buffer_width,
                              buffer_height);
-    output->buffer_width = buffer_width;
-    output->buffer_height = buffer_height;
   }
 
   if (output->viewport) {
@@ -396,9 +421,6 @@ static void render_frame(struct wlsbg_output *output) {
   }
 
   wl_surface_commit(output->surface);
-  if (buf) {
-    wl_buffer_destroy(buf);
-  }
 }
 
 static void destroy_wlsbg_image(struct wlsbg_image *image) {
