@@ -30,8 +30,8 @@ these options.
 	Set the background image.
 
 *-l, --layer* <layer>
-	Set the layer to display on, valid types are: _background_, _bottom_, _top_, _overlay_
-	Default is background.
+	Set the layer to display on, valid types are: _background_, _bottom_, _top_, or _overlay_.
+	Default is _background_.
 
 *-m, --mode* <mode>
 	Scaling mode for images: _stretch_, _fill_, _fit_, _center_, or _tile_.
@@ -45,7 +45,7 @@ these options.
 *-s, --shader* <path>
 	Apply GLSL shader to wallpaper, must have background image set. Supported uniforms:++
 	_iTexture_ - sampler2D, this is what the image texture is binded to.++
-	_iResolution_ - vec3(displayWidth, displayHeight, aspectRatio)++
+	_iResolution_ - vec3(displayWidth, displayHeight, aspectRatio).++
 	_iTime_ - float, time in seconds.++
 	_iMouse_ - mouse.xy = mouse position during last button down.++
 		abs(mouse.zw) = mouse position during last button click.++
