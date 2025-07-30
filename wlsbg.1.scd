@@ -8,7 +8,7 @@ wlsbg - Wayland shader background
 
 *wlsbg* [options...]
 
-Displays a background image on all outputs of your Wayland session.
+Displays a background image and an optional shader on all outputs of your Wayland session.
 
 Without an output specified, appearance options apply to all outputs.
 Per-output appearance options can be set by passing _-o, --output_ followed by
@@ -19,11 +19,19 @@ these options.
 *-c, --color* <[#]rrggbb>
 	Set the background color.
 
+*-f, --fps* <int>
+	Max FPS (Frames per second) limit of the shader.
+	If unspecified then the max fps will default to 60.
+
 *-h, --help*
 	Show help message and quit.
 
 *-i, --image* <path>
 	Set the background image.
+
+*-l, --layer* <layer>
+	Set the layer to display on, valid types are: background, bottom, top, overlay
+	Default is background.
 
 *-m, --mode* <mode>
 	Scaling mode for images: _stretch_, _fill_, _fit_, _center_, or _tile_.
@@ -34,13 +42,25 @@ these options.
 	Select an output to configure. Subsequent appearance options will only
 	apply to this output. The special value _\*_ selects all outputs.
 
+*-s, --shader* <path>
+	Apply GLSL shader to wallpaper, must have background image set. Supported uniforms:
+		iTexture - sampler2D, this is what the image texture is binded to
+		iResolution - vec3(displayWidth, displayHeight, aspectRatio)
+		iTime - float, time in seconds
+		iMouse - mouse.xy = mouse position during last button down
+			abs(mouse.zw) = mouse position during last button click
+			sign(mouze.z) = button is down
+			sign(mouze.w) = button is clicked
+		iMousePos - vec2, real time position of the mouse
+	See example shaders in the Github <https://github.com/Sublimeful/wlsbg>.
+
 *-v, --version*
 	Show the version number and quit.
 
 # AUTHORS
 
 Maintained by Jian Qiang Wu <Qiangwu2000@gmail.com>. For more information about wlsbg development, see
-<https://github.com/Sublimeful/wlsbg>
+<https://github.com/Sublimeful/wlsbg>.
 
 Original credits to Simon Ser <contact@emersion.fr>, who is assisted by other open
 source contributors. For more information about swaybg development, see

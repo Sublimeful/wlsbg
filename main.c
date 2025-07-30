@@ -471,7 +471,7 @@ static void layer_surface_closed(void *data,
                                  struct zwlr_layer_surface_v1 *surface) {
   struct wlsbg_output *output = data;
   wlsbg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
-             output->identifier);
+            output->identifier);
   destroy_wlsbg_output(output);
 }
 
@@ -544,11 +544,11 @@ static void output_done(void *data, struct wl_output *wl_output) {
   struct wlsbg_output *output = data;
   if (!output->config) {
     wlsbg_log(LOG_DEBUG, "Could not find config for output %s (%s)",
-               output->name, output->identifier);
+              output->name, output->identifier);
     destroy_wlsbg_output(output);
   } else if (!output->layer_surface) {
     wlsbg_log(LOG_DEBUG, "Found config %s for output %s (%s)",
-               output->config->output, output->name, output->identifier);
+              output->config->output, output->name, output->identifier);
     create_layer_surface(output);
   }
 }
@@ -671,7 +671,7 @@ static void handle_global_remove(void *data, struct wl_registry *registry,
   wl_list_for_each_safe(output, tmp, &state->outputs, link) {
     if (output->wl_name == name) {
       wlsbg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
-                 output->identifier);
+                output->identifier);
       destroy_wlsbg_output(output);
       break;
     }
@@ -684,7 +684,7 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 static bool store_wlsbg_output_config(struct wlsbg_state *state,
-                                       struct wlsbg_output_config *config) {
+                                      struct wlsbg_output_config *config) {
   struct wlsbg_output_config *oc = NULL;
   wl_list_for_each(oc, &state->configs, link) {
     if (strcmp(config->output, oc->output) == 0) {
@@ -724,15 +724,17 @@ static void parse_command_line(int argc, char **argv,
       "Usage: wlsbg <options...>\n"
       "\n"
       "  -c, --color RRGGBB     Set the background color.\n"
-      "  -f, --fps <int>        FPS of the shader.\n"
+      "  -f, --fps <int>        Max FPS limit of the shader.\n"
       "  -h, --help             Show help message and quit.\n"
       "  -i, --image <path>     Set the image to display.\n"
-      "  -l, --layer <layer>    Set the layer to use: background, bottom, "
-      "top, overlay\n"
+      "  -l, --layer <layer>    Set the layer to display on.\n"
       "  -m, --mode <mode>      Set the mode to use for the image.\n"
       "  -o, --output <name>    Set the output to operate on or * for all.\n"
-      "  -s, --shader <path>    Apply GLSL shader to wallpaper\n"
+      "  -s, --shader <path>    Apply GLSL shader to wallpaper.\n"
       "  -v, --version          Show the version number and quit.\n"
+      "\n"
+      "Layer Types:\n"
+      "  background, bottom, top, or overlay\n"
       "\n"
       "Background Modes:\n"
       "  stretch, fit, fill, center, tile, or solid_color\n";
@@ -755,9 +757,9 @@ static void parse_command_line(int argc, char **argv,
     case 'c': // color
       if (!parse_color(optarg, &config->color)) {
         wlsbg_log(LOG_ERROR,
-                   "%s is not a valid color for wlsbg. "
-                   "Color should be specified as rrggbb or #rrggbb (no alpha).",
-                   optarg);
+                  "%s is not a valid color for wlsbg. "
+                  "Color should be specified as rrggbb or #rrggbb (no alpha).",
+                  optarg);
         continue;
       }
       break;
@@ -836,7 +838,8 @@ static void parse_command_line(int argc, char **argv,
   config = NULL;
   struct wlsbg_output_config *tmp = NULL;
   wl_list_for_each_safe(config, tmp, &state->configs, link) {
-    if (!config->image_path && !config->color) {
+    if ((!config->image_path && !config->color) ||
+        (!config->image_path && config->shader_path)) {
       destroy_wlsbg_output_config(config);
     } else if (config->mode == BACKGROUND_MODE_INVALID) {
       config->mode = config->image_path ? BACKGROUND_MODE_STRETCH
@@ -904,8 +907,8 @@ int main(int argc, char **argv) {
   state.display = wl_display_connect(NULL);
   if (!state.display) {
     wlsbg_log(LOG_ERROR, "Unable to connect to the compositor. "
-                          "If your compositor is running, check or set the "
-                          "WAYLAND_DISPLAY environment variable.");
+                         "If your compositor is running, check or set the "
+                         "WAYLAND_DISPLAY environment variable.");
     return 1;
   }
 
@@ -945,7 +948,7 @@ int main(int argc, char **argv) {
     // Update mouse state (is clicked should only be for one frame)
     state.mouse.is_clicked = false;
 
-    // Limit to 60 FPS
+    // Limit to specified frame time
     struct timespec sleep_time = {.tv_nsec = state.frame_time};
     nanosleep(&sleep_time, NULL);
   }
