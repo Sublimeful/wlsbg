@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            meson \
+            libwayland-dev \
+            wayland-protocols \
+            libcairo2-dev \
+            libegl1-mesa-dev \
+            libgdk-pixbuf-2.0-dev \
+            scdoc
+      - name: setup
+        run: meson build/ --fatal-meson-warnings -Dauto_features=enabled
+      - name: build
+        run: ninja -C build/
+      - name: package
+        run: |
+          mkdir -p wlsbg-linux-x86_64/bin
+          cp build/wlsbg wlsbg-linux-x86_64/bin/wlsbg
+          mkdir -p wlsbg-linux-x86_64/share/man/man1
+          cp build/wlsbg.1 wlsbg-linux-x86_64/share/man/man1/wlsbg.1
+          tar -czvf wlsbg-linux-x86_64.tar.gz wlsbg-linux-x86_64/
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: ${{ github.ref_name }}
+          prerelease: false
+          title: "wlsbg ${{ github.ref_name }}"
+          files: |
+            LICENSE.txt
+            wlsbg-linux-x86_64.tar.gz

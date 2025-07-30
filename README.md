@@ -22,9 +22,7 @@ Install dependencies:
 * wayland
 * wayland-protocols \*
 * cairo
-* opengl
-* egl
-* glesv2
+* egl-mesa
 * gdk-pixbuf2 (optional: image formats other than PNG)
 * [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (optional: man pages) \*
 * git (optional: version information) \*
