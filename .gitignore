@@ -1,5 +1,3 @@
 build
-compile_commands.json
-install.sh
 .cache
-shaders
+compile_commands.json
