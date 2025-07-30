@@ -860,11 +860,11 @@ static void parse_command_line(int argc, char **argv,
   config = NULL;
   struct wlsbg_output_config *tmp = NULL;
   wl_list_for_each_safe(config, tmp, &state->configs, link) {
-    if (!config->image_path && !config->color) {
-      destroy_wlsbg_output_config(config);
-    } else if (!config->image_path && config->shader_path) {
+    if (!config->image_path && config->shader_path) {
       wlsbg_log(LOG_ERROR,
                 "You must specify an image when trying to use shaders.");
+      destroy_wlsbg_output_config(config);
+    } else if (!config->image_path && !config->color) {
       destroy_wlsbg_output_config(config);
     } else if (config->mode == BACKGROUND_MODE_INVALID) {
       config->mode = config->image_path ? BACKGROUND_MODE_STRETCH
