@@ -46,7 +46,7 @@ static bool parse_color(const char *color, uint32_t *result) {
   return true;
 }
 
-struct swaybg_state {
+struct wlsbg_state {
   struct wl_display *display;
   struct wl_compositor *compositor;
   struct wl_shm *shm;
@@ -54,9 +54,9 @@ struct swaybg_state {
   struct wp_viewporter *viewporter;
   struct wp_single_pixel_buffer_manager_v1 *single_pixel_buffer_manager;
   struct wp_fractional_scale_manager_v1 *fract_scale_manager;
-  struct wl_list configs; // struct swaybg_output_config::link
-  struct wl_list outputs; // struct swaybg_output::link
-  struct wl_list images;  // struct swaybg_image::link
+  struct wl_list configs; // struct wlsbg_output_config::link
+  struct wl_list outputs; // struct wlsbg_output::link
+  struct wl_list images;  // struct wlsbg_image::link
   bool run_display;
   struct timespec start_time; // Track program start time for shaders
   struct wl_seat *seat;
@@ -74,16 +74,16 @@ struct swaybg_state {
   } mouse;
 };
 
-struct swaybg_image {
+struct wlsbg_image {
   struct wl_list link;
   const char *path;
   cairo_surface_t *surface; // Store loaded surface
 };
 
-struct swaybg_output_config {
+struct wlsbg_output_config {
   char *output;
   const char *image_path;
-  struct swaybg_image *image;
+  struct wlsbg_image *image;
   enum background_mode mode;
   uint32_t color;
   struct wl_list link;
@@ -91,14 +91,14 @@ struct swaybg_output_config {
   const char *shader_path;
 };
 
-struct swaybg_output {
+struct wlsbg_output {
   uint32_t wl_name;
   struct wl_output *wl_output;
   char *name;
   char *identifier;
 
-  struct swaybg_state *state;
-  struct swaybg_output_config *config;
+  struct wlsbg_state *state;
+  struct wlsbg_output_config *config;
 
   struct wl_surface *surface;
   struct zwlr_layer_surface_v1 *layer_surface;
@@ -133,7 +133,7 @@ struct swaybg_output {
 // Add new listeners
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
-  struct swaybg_state *s = data;
+  struct wlsbg_state *s = data;
   s->mouse.x = wl_fixed_to_double(sx * 2);
   s->mouse.y = wl_fixed_to_double(sy * 2);
 
@@ -156,7 +156,7 @@ static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
 static void pointer_handle_button(void *data, struct wl_pointer *pointer,
                                   uint32_t serial, uint32_t time,
                                   uint32_t button, uint32_t state) {
-  struct swaybg_state *s = data;
+  struct wlsbg_state *s = data;
 
   if (button == BTN_LEFT) {
     s->mouse.is_down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
@@ -211,7 +211,7 @@ static const struct wl_pointer_listener pointer_listener = {
 
 static void seat_handle_capabilities(void *data, struct wl_seat *seat,
                                      enum wl_seat_capability caps) {
-  struct swaybg_state *state = data;
+  struct wlsbg_state *state = data;
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !state->pointer) {
     state->pointer = wl_seat_get_pointer(seat);
     wl_pointer_add_listener(state->pointer, &pointer_listener, state);
@@ -240,8 +240,8 @@ static void normalize_mouse_position(float input_mouse_x, float input_mouse_y,
 }
 
 // Update output mouse positions before rendering
-static void update_mouse_positions(struct swaybg_state *state) {
-  struct swaybg_output *output;
+static void update_mouse_positions(struct wlsbg_state *state) {
+  struct wlsbg_output *output;
   wl_list_for_each(output, &state->outputs, link) {
     normalize_mouse_position(state->mouse.x, state->mouse.y, &output->mouse.x,
                              &output->mouse.y, output->x, output->y);
@@ -255,7 +255,7 @@ static void update_mouse_positions(struct swaybg_state *state) {
 }
 
 // Create a wl_buffer with the specified dimensions and content
-static struct wl_buffer *draw_buffer(const struct swaybg_output *output,
+static struct wl_buffer *draw_buffer(const struct wlsbg_output *output,
                                      cairo_surface_t *surface,
                                      uint32_t buffer_width,
                                      uint32_t buffer_height) {
@@ -301,7 +301,7 @@ static struct wl_buffer *draw_buffer(const struct swaybg_output *output,
 #define FRACT_DENOM 120
 
 // Return the size of the buffer that should be attached to this output
-static void get_buffer_size(const struct swaybg_output *output,
+static void get_buffer_size(const struct wlsbg_output *output,
                             uint32_t *buffer_width, uint32_t *buffer_height) {
   if (output->config->mode == BACKGROUND_MODE_SOLID_COLOR &&
       output->state->viewporter) {
@@ -321,7 +321,7 @@ static void get_buffer_size(const struct swaybg_output *output,
   }
 }
 
-static void render_frame(struct swaybg_output *output) {
+static void render_frame(struct wlsbg_output *output) {
   uint32_t buffer_width, buffer_height;
   get_buffer_size(output, &buffer_width, &buffer_height);
 
@@ -401,7 +401,7 @@ static void render_frame(struct swaybg_output *output) {
   }
 }
 
-static void destroy_swaybg_image(struct swaybg_image *image) {
+static void destroy_wlsbg_image(struct wlsbg_image *image) {
   if (!image) {
     return;
   }
@@ -409,7 +409,7 @@ static void destroy_swaybg_image(struct swaybg_image *image) {
   free(image);
 }
 
-static void destroy_swaybg_output_config(struct swaybg_output_config *config) {
+static void destroy_wlsbg_output_config(struct wlsbg_output_config *config) {
   if (!config) {
     return;
   }
@@ -418,7 +418,7 @@ static void destroy_swaybg_output_config(struct swaybg_output_config *config) {
   free(config);
 }
 
-static void destroy_swaybg_output(struct swaybg_output *output) {
+static void destroy_wlsbg_output(struct wlsbg_output *output) {
   if (!output) {
     return;
   }
@@ -459,7 +459,7 @@ static void layer_surface_configure(void *data,
                                     struct zwlr_layer_surface_v1 *surface,
                                     uint32_t serial, uint32_t width,
                                     uint32_t height) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
   output->width = width;
   output->height = height;
   output->dirty = true;
@@ -469,10 +469,10 @@ static void layer_surface_configure(void *data,
 
 static void layer_surface_closed(void *data,
                                  struct zwlr_layer_surface_v1 *surface) {
-  struct swaybg_output *output = data;
-  swaybg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
+  struct wlsbg_output *output = data;
+  wlsbg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
              output->identifier);
-  destroy_swaybg_output(output);
+  destroy_wlsbg_output(output);
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
@@ -482,7 +482,7 @@ static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
 
 static void fract_preferred_scale(void *data, struct wp_fractional_scale_v1 *f,
                                   uint32_t scale) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
   output->pref_fract_scale = scale;
 }
 
@@ -493,9 +493,9 @@ static void output_geometry(void *data, struct wl_output *output, int32_t x,
                             int32_t y, int32_t width_mm, int32_t height_mm,
                             int32_t subpixel, const char *make,
                             const char *model, int32_t transform) {
-  struct swaybg_output *swaybg_output = data;
-  swaybg_output->x = x;
-  swaybg_output->y = y;
+  struct wlsbg_output *wlsbg_output = data;
+  wlsbg_output->x = x;
+  wlsbg_output->y = y;
 }
 
 static void output_mode(void *data, struct wl_output *output, uint32_t flags,
@@ -503,7 +503,7 @@ static void output_mode(void *data, struct wl_output *output, uint32_t flags,
   // Who cares
 }
 
-static void create_layer_surface(struct swaybg_output *output) {
+static void create_layer_surface(struct wlsbg_output *output) {
   output->surface = wl_compositor_create_surface(output->state->compositor);
   assert(output->surface);
 
@@ -541,13 +541,13 @@ static void create_layer_surface(struct swaybg_output *output) {
 }
 
 static void output_done(void *data, struct wl_output *wl_output) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
   if (!output->config) {
-    swaybg_log(LOG_DEBUG, "Could not find config for output %s (%s)",
+    wlsbg_log(LOG_DEBUG, "Could not find config for output %s (%s)",
                output->name, output->identifier);
-    destroy_swaybg_output(output);
+    destroy_wlsbg_output(output);
   } else if (!output->layer_surface) {
-    swaybg_log(LOG_DEBUG, "Found config %s for output %s (%s)",
+    wlsbg_log(LOG_DEBUG, "Found config %s for output %s (%s)",
                output->config->output, output->name, output->identifier);
     create_layer_surface(output);
   }
@@ -555,15 +555,15 @@ static void output_done(void *data, struct wl_output *wl_output) {
 
 static void output_scale(void *data, struct wl_output *wl_output,
                          int32_t scale) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
   output->scale = scale;
   if (output->state->run_display && output->width > 0 && output->height > 0) {
     output->dirty = true;
   }
 }
 
-static void find_config(struct swaybg_output *output, const char *name) {
-  struct swaybg_output_config *config = NULL;
+static void find_config(struct wlsbg_output *output, const char *name) {
+  struct wlsbg_output_config *config = NULL;
   wl_list_for_each(config, &output->state->configs, link) {
     if (strcmp(config->output, name) == 0) {
       output->config = config;
@@ -576,7 +576,7 @@ static void find_config(struct swaybg_output *output, const char *name) {
 
 static void output_name(void *data, struct wl_output *wl_output,
                         const char *name) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
   output->name = strdup(name);
 
   // If description was sent first, the config may already be populated. If
@@ -588,7 +588,7 @@ static void output_name(void *data, struct wl_output *wl_output,
 
 static void output_description(void *data, struct wl_output *wl_output,
                                const char *description) {
-  struct swaybg_output *output = data;
+  struct wlsbg_output *output = data;
 
   // wlroots currently sets the description to `make model serial (name)`
   // If this changes in the future, this will need to be modified.
@@ -597,7 +597,7 @@ static void output_description(void *data, struct wl_output *wl_output,
     size_t length = paren - description;
     output->identifier = malloc(length);
     if (!output->identifier) {
-      swaybg_log(LOG_ERROR, "Failed to allocate output identifier");
+      wlsbg_log(LOG_ERROR, "Failed to allocate output identifier");
       return;
     }
     strncpy(output->identifier, description, length);
@@ -619,14 +619,14 @@ static const struct wl_output_listener output_listener = {
 static void handle_global(void *data, struct wl_registry *registry,
                           uint32_t name, const char *interface,
                           uint32_t version) {
-  struct swaybg_state *state = data;
+  struct wlsbg_state *state = data;
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     state->compositor =
         wl_registry_bind(registry, name, &wl_compositor_interface, 4);
   } else if (strcmp(interface, wl_shm_interface.name) == 0) {
     state->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
   } else if (strcmp(interface, wl_output_interface.name) == 0) {
-    struct swaybg_output *output = calloc(1, sizeof(struct swaybg_output));
+    struct wlsbg_output *output = calloc(1, sizeof(struct wlsbg_output));
     output->state = state;
     output->scale = 1;
     output->wl_name = name;
@@ -666,13 +666,13 @@ static void handle_global(void *data, struct wl_registry *registry,
 
 static void handle_global_remove(void *data, struct wl_registry *registry,
                                  uint32_t name) {
-  struct swaybg_state *state = data;
-  struct swaybg_output *output, *tmp;
+  struct wlsbg_state *state = data;
+  struct wlsbg_output *output, *tmp;
   wl_list_for_each_safe(output, tmp, &state->outputs, link) {
     if (output->wl_name == name) {
-      swaybg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
+      wlsbg_log(LOG_DEBUG, "Destroying output %s (%s)", output->name,
                  output->identifier);
-      destroy_swaybg_output(output);
+      destroy_wlsbg_output(output);
       break;
     }
   }
@@ -683,9 +683,9 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = handle_global_remove,
 };
 
-static bool store_swaybg_output_config(struct swaybg_state *state,
-                                       struct swaybg_output_config *config) {
-  struct swaybg_output_config *oc = NULL;
+static bool store_wlsbg_output_config(struct wlsbg_state *state,
+                                       struct wlsbg_output_config *config) {
+  struct wlsbg_output_config *oc = NULL;
   wl_list_for_each(oc, &state->configs, link) {
     if (strcmp(config->output, oc->output) == 0) {
       // Merge on top
@@ -707,7 +707,7 @@ static bool store_swaybg_output_config(struct swaybg_state *state,
 }
 
 static void parse_command_line(int argc, char **argv,
-                               struct swaybg_state *state) {
+                               struct wlsbg_state *state) {
   static struct option long_options[] = {
       {"color", required_argument, NULL, 'c'},
       {"fps", required_argument, NULL, 'f'},
@@ -721,7 +721,7 @@ static void parse_command_line(int argc, char **argv,
       {0, 0, 0, 0}};
 
   const char *usage =
-      "Usage: swaybg <options...>\n"
+      "Usage: wlsbg <options...>\n"
       "\n"
       "  -c, --color RRGGBB     Set the background color.\n"
       "  -f, --fps <int>        FPS of the shader.\n"
@@ -737,8 +737,8 @@ static void parse_command_line(int argc, char **argv,
       "Background Modes:\n"
       "  stretch, fit, fill, center, tile, or solid_color\n";
 
-  struct swaybg_output_config *config =
-      calloc(1, sizeof(struct swaybg_output_config));
+  struct wlsbg_output_config *config =
+      calloc(1, sizeof(struct wlsbg_output_config));
   config->output = strdup("*");
   config->mode = BACKGROUND_MODE_INVALID;
   wl_list_init(&config->link); // init for safe removal
@@ -754,8 +754,8 @@ static void parse_command_line(int argc, char **argv,
     switch (c) {
     case 'c': // color
       if (!parse_color(optarg, &config->color)) {
-        swaybg_log(LOG_ERROR,
-                   "%s is not a valid color for swaybg. "
+        wlsbg_log(LOG_ERROR,
+                   "%s is not a valid color for wlsbg. "
                    "Color should be specified as rrggbb or #rrggbb (no alpha).",
                    optarg);
         continue;
@@ -774,21 +774,21 @@ static void parse_command_line(int argc, char **argv,
     case 'm': // mode
       config->mode = parse_background_mode(optarg);
       if (config->mode == BACKGROUND_MODE_INVALID) {
-        swaybg_log(LOG_ERROR, "Invalid mode: %s", optarg);
+        wlsbg_log(LOG_ERROR, "Invalid mode: %s", optarg);
       }
       break;
     case 'o': // output
-      if (config && !store_swaybg_output_config(state, config)) {
+      if (config && !store_wlsbg_output_config(state, config)) {
         // Empty config or merged on top of an existing one
-        destroy_swaybg_output_config(config);
+        destroy_wlsbg_output_config(config);
       }
-      config = calloc(1, sizeof(struct swaybg_output_config));
+      config = calloc(1, sizeof(struct wlsbg_output_config));
       config->output = strdup(optarg);
       config->mode = BACKGROUND_MODE_INVALID;
       wl_list_init(&config->link); // init for safe removal
       break;
     case 'v': // version
-      fprintf(stdout, "swaybg version " SWAYBG_VERSION "\n");
+      fprintf(stdout, "wlsbg version " WLSBG_VERSION "\n");
       exit(EXIT_SUCCESS);
       break;
     case 'l': // layer
@@ -801,7 +801,7 @@ static void parse_command_line(int argc, char **argv,
       } else if (strcmp(optarg, "overlay") == 0) {
         config->layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
       } else {
-        swaybg_log(LOG_ERROR, "Invalid layer: %s", optarg);
+        wlsbg_log(LOG_ERROR, "Invalid layer: %s", optarg);
       }
       break;
     case 's': // shader
@@ -813,17 +813,17 @@ static void parse_command_line(int argc, char **argv,
       break;
     }
   }
-  if (config && !store_swaybg_output_config(state, config)) {
+  if (config && !store_wlsbg_output_config(state, config)) {
     // Empty config or merged on top of an existing one
-    destroy_swaybg_output_config(config);
+    destroy_wlsbg_output_config(config);
   }
 
   // Check for invalid options
   if (optind < argc) {
     config = NULL;
-    struct swaybg_output_config *tmp = NULL;
+    struct wlsbg_output_config *tmp = NULL;
     wl_list_for_each_safe(config, tmp, &state->configs, link) {
-      destroy_swaybg_output_config(config);
+      destroy_wlsbg_output_config(config);
     }
     // continue into empty list
   }
@@ -834,10 +834,10 @@ static void parse_command_line(int argc, char **argv,
 
   // Set default mode and remove empties
   config = NULL;
-  struct swaybg_output_config *tmp = NULL;
+  struct wlsbg_output_config *tmp = NULL;
   wl_list_for_each_safe(config, tmp, &state->configs, link) {
     if (!config->image_path && !config->color) {
-      destroy_swaybg_output_config(config);
+      destroy_wlsbg_output_config(config);
     } else if (config->mode == BACKGROUND_MODE_INVALID) {
       config->mode = config->image_path ? BACKGROUND_MODE_STRETCH
                                         : BACKGROUND_MODE_SOLID_COLOR;
@@ -846,9 +846,9 @@ static void parse_command_line(int argc, char **argv,
 }
 
 int main(int argc, char **argv) {
-  swaybg_log_init(LOG_DEBUG);
+  wlsbg_log_init(LOG_DEBUG);
 
-  struct swaybg_state state = {0};
+  struct wlsbg_state state = {0};
   wl_list_init(&state.configs);
   wl_list_init(&state.outputs);
   wl_list_init(&state.images);
@@ -872,8 +872,8 @@ int main(int argc, char **argv) {
   parse_command_line(argc, argv, &state);
 
   // Load images
-  struct swaybg_image *image;
-  struct swaybg_output_config *config;
+  struct wlsbg_image *image;
+  struct wlsbg_output_config *config;
   wl_list_for_each(config, &state.configs, link) {
     if (!config->image_path)
       continue;
@@ -888,11 +888,11 @@ int main(int argc, char **argv) {
     }
 
     if (!found) {
-      image = calloc(1, sizeof(struct swaybg_image));
+      image = calloc(1, sizeof(struct wlsbg_image));
       image->path = config->image_path;
       image->surface = load_background_image(image->path);
       if (!image->surface) {
-        swaybg_log(LOG_ERROR, "Failed to load image: %s", image->path);
+        wlsbg_log(LOG_ERROR, "Failed to load image: %s", image->path);
         free(image);
         continue;
       }
@@ -903,7 +903,7 @@ int main(int argc, char **argv) {
 
   state.display = wl_display_connect(NULL);
   if (!state.display) {
-    swaybg_log(LOG_ERROR, "Unable to connect to the compositor. "
+    wlsbg_log(LOG_ERROR, "Unable to connect to the compositor. "
                           "If your compositor is running, check or set the "
                           "WAYLAND_DISPLAY environment variable.");
     return 1;
@@ -912,12 +912,12 @@ int main(int argc, char **argv) {
   struct wl_registry *registry = wl_display_get_registry(state.display);
   wl_registry_add_listener(registry, &registry_listener, &state);
   if (wl_display_roundtrip(state.display) < 0) {
-    swaybg_log(LOG_ERROR, "wl_display_roundtrip failed");
+    wlsbg_log(LOG_ERROR, "wl_display_roundtrip failed");
     return 1;
   }
   if (state.compositor == NULL || state.shm == NULL ||
       state.layer_shell == NULL) {
-    swaybg_log(LOG_ERROR, "Missing a required Wayland interface");
+    wlsbg_log(LOG_ERROR, "Missing a required Wayland interface");
     return 1;
   }
 
@@ -926,7 +926,7 @@ int main(int argc, char **argv) {
     update_mouse_positions(&state);
 
     // Send acks, and determine which images need to be loaded
-    struct swaybg_output *output;
+    struct wlsbg_output *output;
     wl_list_for_each(output, &state.outputs, link) {
       if (output->needs_ack) {
         output->needs_ack = false;
@@ -950,20 +950,20 @@ int main(int argc, char **argv) {
     nanosleep(&sleep_time, NULL);
   }
 
-  struct swaybg_output *output, *tmp_output;
+  struct wlsbg_output *output, *tmp_output;
   wl_list_for_each_safe(output, tmp_output, &state.outputs, link) {
-    destroy_swaybg_output(output);
+    destroy_wlsbg_output(output);
   }
 
-  struct swaybg_output_config *tmp_config = NULL;
+  struct wlsbg_output_config *tmp_config = NULL;
   wl_list_for_each_safe(config, tmp_config, &state.configs, link) {
-    destroy_swaybg_output_config(config);
+    destroy_wlsbg_output_config(config);
   }
 
-  struct swaybg_image *tmp_image;
+  struct wlsbg_image *tmp_image;
   wl_list_for_each_safe(image, tmp_image, &state.images, link) {
     cairo_surface_destroy(image->surface);
-    destroy_swaybg_image(image);
+    destroy_wlsbg_image(image);
   }
 
   if (state.seat) {

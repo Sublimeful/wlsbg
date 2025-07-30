@@ -1,5 +1,5 @@
 project(
-	'swaybg',
+	'wlsbg',
 	'c',
 	version: '1.2.1',
 	license: 'MIT',
@@ -55,7 +55,7 @@ if git.found()
 endif
 
 add_project_arguments([
-	'-DSWAYBG_VERSION=@0@'.format(version),
+	'-DWLSBG_VERSION=@0@'.format(version),
 	'-DHAVE_GDK_PIXBUF=@0@'.format(gdk_pixbuf.found().to_int()),
 ], language: 'c')
 
@@ -91,7 +91,7 @@ foreach filename : client_protocols
 endforeach
 
 executable(
-	'swaybg',
+	'wlsbg',
 	[
 		'background-image.c',
 		'cairo.c',
@@ -117,7 +117,7 @@ executable(
 if scdoc.found()
 	mandir = get_option('mandir')
 	man_files = [
-		'swaybg.1.scd',
+		'wlsbg.1.scd',
 	]
 	foreach filename : man_files
 		topic = filename.split('.')[-3].split('/')[-1]

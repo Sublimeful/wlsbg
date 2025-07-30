@@ -1,12 +1,12 @@
-swaybg(1)
+wlsbg(1)
 
 # NAME
 
-swaybg - Background for Wayland
+wlsbg - Wayland shader background
 
 # SYNOPSIS
 
-*swaybg* [options...]
+*wlsbg* [options...]
 
 Displays a background image on all outputs of your Wayland session.
 
@@ -39,6 +39,9 @@ these options.
 
 # AUTHORS
 
-Maintained by Simon Ser <contact@emersion.fr>, who is assisted by other open
+Maintained by Jian Qiang Wu <Qiangwu2000@gmail.com>. For more information about wlsbg development, see
+<https://github.com/Sublimeful/wlsbg>
+
+Original credits to Simon Ser <contact@emersion.fr>, who is assisted by other open
 source contributors. For more information about swaybg development, see
 <https://github.com/swaywm/swaybg>.

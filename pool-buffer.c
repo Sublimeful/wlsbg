@@ -20,7 +20,7 @@ static int anonymous_shm_open(void) {
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		pid_t pid = getpid();
 		char name[50];
-		snprintf(name, sizeof(name), "/swaybg-%x-%x",
+		snprintf(name, sizeof(name), "/wlsbg-%x-%x",
 			(unsigned int)pid, (unsigned int)ts.tv_nsec);
 
 		// shm_open guarantees that O_CLOEXEC is set

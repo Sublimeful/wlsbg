@@ -17,7 +17,7 @@ enum background_mode parse_background_mode(const char *mode) {
 	} else if (strcmp(mode, "solid_color") == 0) {
 		return BACKGROUND_MODE_SOLID_COLOR;
 	}
-	swaybg_log(LOG_ERROR, "Unsupported background mode: %s", mode);
+	wlsbg_log(LOG_ERROR, "Unsupported background mode: %s", mode);
 	return BACKGROUND_MODE_INVALID;
 }
 
@@ -27,7 +27,7 @@ cairo_surface_t *load_background_image(const char *path) {
 	GError *err = NULL;
 	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(path, &err);
 	if (!pixbuf) {
-		swaybg_log(LOG_ERROR, "Failed to load background image (%s).",
+		wlsbg_log(LOG_ERROR, "Failed to load background image (%s).",
 				err->message);
 		return NULL;
 	}
@@ -41,11 +41,11 @@ cairo_surface_t *load_background_image(const char *path) {
 	image = cairo_image_surface_create_from_png(path);
 #endif // HAVE_GDK_PIXBUF
 	if (!image) {
-		swaybg_log(LOG_ERROR, "Failed to read background image.");
+		wlsbg_log(LOG_ERROR, "Failed to read background image.");
 		return NULL;
 	}
 	if (cairo_surface_status(image) != CAIRO_STATUS_SUCCESS) {
-		swaybg_log(LOG_ERROR, "Failed to read background image: %s."
+		wlsbg_log(LOG_ERROR, "Failed to read background image: %s."
 #if !HAVE_GDK_PIXBUF
 				"\nSway was compiled without gdk_pixbuf support, so only"
 				"\nPNG images can be loaded. This is the likely cause."
