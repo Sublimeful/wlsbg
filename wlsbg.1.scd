@@ -43,17 +43,16 @@ these options.
 	apply to this output. The special value _\*_ selects all outputs.
 
 *-s, --shader* <path>
-	Apply GLSL shader to wallpaper, must have background image set. Supported uniforms:
-		_iTexture_ - sampler2D, this is what the image texture is binded to
-		_iResolution_ - vec3(displayWidth, displayHeight, aspectRatio)
-		_iTime_ - float, time in seconds
-		_iMouse_ - mouse.xy = mouse position during last button down
-			abs(mouse.zw) = mouse position during last button click
-			sign(mouze.z) = button is down
-			sign(mouze.w) = button is clicked
-		_iMousePos_ - vec2, real time position of the mouse
-	There is also the input vTexCoord, which maps to the texture coordinates of the input image.
-	See example shaders by visiting the Github at <https://github.com/Sublimeful/wlsbg/tree/master/examples>.
+	Apply GLSL shader to wallpaper, must have background image set. Supported uniforms:++
+	_iTexture_ - sampler2D, this is what the image texture is binded to.++
+	_iResolution_ - vec3(displayWidth, displayHeight, aspectRatio)++
+	_iTime_ - float, time in seconds.++
+	_iMouse_ - mouse.xy = mouse position during last button down.++
+		abs(mouse.zw) = mouse position during last button click.++
+		sign(mouze.z) = button is down.++
+		sign(mouze.w) = button is clicked.++
+	_iMousePos_ - vec2, real time position of the mouse.++
+There is also the input vTexCoord, which maps to the texture coordinates of the input image. See example shaders by visiting the Github at <https://github.com/Sublimeful/wlsbg/tree/master/examples>.
 
 *-v, --version*
 	Show the version number and quit.
