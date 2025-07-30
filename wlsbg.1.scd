@@ -30,7 +30,7 @@ these options.
 	Set the background image.
 
 *-l, --layer* <layer>
-	Set the layer to display on, valid types are: background, bottom, top, overlay
+	Set the layer to display on, valid types are: _background_, _bottom_, _top_, _overlay_
 	Default is background.
 
 *-m, --mode* <mode>
@@ -44,14 +44,15 @@ these options.
 
 *-s, --shader* <path>
 	Apply GLSL shader to wallpaper, must have background image set. Supported uniforms:
-		iTexture - sampler2D, this is what the image texture is binded to
-		iResolution - vec3(displayWidth, displayHeight, aspectRatio)
-		iTime - float, time in seconds
-		iMouse - mouse.xy = mouse position during last button down
+		_iTexture_ - sampler2D, this is what the image texture is binded to
+		_iResolution_ - vec3(displayWidth, displayHeight, aspectRatio)
+		_iTime_ - float, time in seconds
+		_iMouse_ - mouse.xy = mouse position during last button down
 			abs(mouse.zw) = mouse position during last button click
 			sign(mouze.z) = button is down
 			sign(mouze.w) = button is clicked
-		iMousePos - vec2, real time position of the mouse
+		_iMousePos_ - vec2, real time position of the mouse
+	There is also the input vTexCoord, which maps to the texture coordinates of the input image.
 	See example shaders in the Github <https://github.com/Sublimeful/wlsbg>.
 
 *-v, --version*
