@@ -27,16 +27,11 @@ if is_freebsd
 	add_project_arguments('-D_C11_SOURCE', language: 'c')
 endif
 
-rt = cc.find_library('rt')
-
-wayland_client = dependency('wayland-client')
+wayland_egl = dependency('wayland-egl')
 wayland_protos = dependency('wayland-protocols', version: '>=1.31')
 wayland_scanner = dependency('wayland-scanner', version: '>=1.14.91', native: true)
-cairo = dependency('cairo')
-gdk_pixbuf = dependency('gdk-pixbuf-2.0', required: get_option('gdk-pixbuf'))
 opengl_dep = dependency('gl')
 egl_dep = dependency('egl')
-glesv2_dep = dependency('glesv2')
 
 git = find_program('git', required: false, native: true)
 scdoc = find_program('scdoc', required: get_option('man-pages'), native: true)
@@ -56,7 +51,6 @@ endif
 
 add_project_arguments([
 	'-DWLSBG_VERSION=@0@'.format(version),
-	'-DHAVE_GDK_PIXBUF=@0@'.format(gdk_pixbuf.found().to_int()),
 ], language: 'c')
 
 wl_protocol_dir = wayland_protos.get_variable('pkgdatadir')
@@ -79,9 +73,6 @@ protos_src = []
 
 client_protocols = [
 	wl_protocol_dir / 'stable/xdg-shell/xdg-shell.xml',
-	wl_protocol_dir / 'stable/viewporter/viewporter.xml',
-	wl_protocol_dir / 'staging/single-pixel-buffer/single-pixel-buffer-v1.xml',
-	wl_protocol_dir / 'staging/fractional-scale/fractional-scale-v1.xml',
 	'wlr-layer-shell-unstable-v1.xml',
 ]
 
@@ -93,23 +84,15 @@ endforeach
 executable(
 	'wlsbg',
 	[
-		'background-image.c',
-		'cairo.c',
-		'log.c',
 		'main.c',
-		'pool-buffer.c',
         'shader.c',
 		protos_src,
 	],
 	include_directories: 'include',
 	dependencies: [
-		cairo,
-		rt,
-		gdk_pixbuf,
-		wayland_client,
+		wayland_egl,
         opengl_dep,
         egl_dep,
-        glesv2_dep,
 	],
 	install: true
 )
