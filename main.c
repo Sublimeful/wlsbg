@@ -222,8 +222,8 @@ static const struct wl_output_listener output_listener = {
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
   struct state *s = data;
-  s->mouse.x = wl_fixed_to_double(sx * 2);
-  s->mouse.y = wl_fixed_to_double(sy * 2);
+  s->mouse.x = wl_fixed_to_double(sx);
+  s->mouse.y = wl_fixed_to_double(sy);
 
   if (s->mouse.is_down) {
     s->mouse.down_x = s->mouse.x;
@@ -462,14 +462,15 @@ int main(int argc, char *argv[]) {
         }
 
         // Create iMouse struct for uniform
-        iMouse mouse = {state.mouse.x,
-                        state.mouse.y,
-                        state.mouse.down_x,
-                        state.mouse.down_y,
-                        state.mouse.is_down ? state.mouse.click_x
-                                            : -state.mouse.click_x,
-                        state.mouse.is_clicked ? state.mouse.click_y
-                                               : -state.mouse.click_y};
+        iMouse mouse = {.real_x = state.mouse.x,
+                        .real_y = output->height - state.mouse.y,
+                        .x = state.mouse.down_x,
+                        .y = output->height - state.mouse.down_y,
+                        .z = state.mouse.is_down ? state.mouse.click_x
+                                                 : -state.mouse.click_x,
+                        .w = state.mouse.is_clicked
+                                 ? output->height - state.mouse.click_y
+                                 : -(output->height - state.mouse.click_y)};
         // Mouse click should only be for 1 frame
         state.mouse.is_clicked = false;
 

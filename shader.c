@@ -145,6 +145,7 @@ shader_context *shader_create(struct wl_display *display,
           "uniform vec3 iResolution;\n"
           "uniform float iTime;\n"
           "uniform vec4 iMouse;\n"
+          "uniform vec2 iMousePos;\n"
           "uniform sampler2D iChannel0;\n"
           "out vec4 fragColor;\n"
           "%s\n"
@@ -251,11 +252,13 @@ void shader_render(shader_context *ctx, double time, iMouse *mouse,
   if (ctx->u_time >= 0) {
     glUniform1f(ctx->u_time, (float)time);
   }
-  if (ctx->u_mouse >= 0) {
-    glUniform4f(ctx->u_mouse, mouse->x, mouse->y, mouse->z, mouse->w);
-  }
-  if (ctx->u_mouse_pos >= 0) {
-    glUniform2f(ctx->u_mouse, mouse->real_x, mouse->real_y);
+  if (mouse) {
+    if (ctx->u_mouse >= 0) {
+      glUniform4f(ctx->u_mouse, mouse->x, mouse->y, mouse->z, mouse->w);
+    }
+    if (ctx->u_mouse_pos >= 0) {
+      glUniform2f(ctx->u_mouse_pos, mouse->real_x, mouse->real_y);
+    }
   }
   if (ctx->u_texture >= 0) {
     glActiveTexture(GL_TEXTURE0);

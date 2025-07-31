@@ -1,2 +1,2 @@
 #!/bin/bash
-./build/wlsbg -f 120 '*' ~/Pictures/Wallpapers/test.glsl
+./build/wlsbg '*' ./examples/mouse.glsl
