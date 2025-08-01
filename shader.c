@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <wayland-egl.h>
 
 // Simple vertex data - single triangle covering entire screen
@@ -68,6 +69,8 @@ shader_context *shader_create(struct wl_display *display,
   if (!ctx)
     return NULL;
 
+  ctx->frame = 0;
+  ctx->last_time = 0.0;
   ctx->width = width;
   ctx->height = height;
 
@@ -142,18 +145,23 @@ shader_context *shader_create(struct wl_display *display,
     goto error;
 
   // Create fragment shader with Shadertoy compatibility
-  char *full_frag_source = malloc(strlen(frag_source) + 512);
+  char *full_frag_source = malloc(strlen(frag_source) + 1024);
   sprintf(full_frag_source,
           "#version 320 es\n"
           "precision highp float;\n"
           "uniform vec3 iResolution;\n"
           "uniform float iTime;\n"
+          "uniform float iTimeDelta;\n"
+          "uniform int iFrame;\n"
+          "uniform float iFrameRate;\n"
           "uniform vec4 iMouse;\n"
           "uniform vec2 iMousePos;\n"
+          "uniform vec4 iDate;\n"
           "uniform sampler2D iChannel0;\n"
           "uniform sampler2D iChannel1;\n"
           "uniform sampler2D iChannel2;\n"
           "uniform sampler2D iChannel3;\n"
+          "uniform vec3 iChannelResolution[4];\n"
           "out vec4 fragColor;\n"
           "%s\n"
           "void main() {\n"
@@ -208,14 +216,25 @@ shader_context *shader_create(struct wl_display *display,
   // Get uniform locations
   ctx->u_resolution = glGetUniformLocation(ctx->program, "iResolution");
   ctx->u_time = glGetUniformLocation(ctx->program, "iTime");
+  ctx->u_time_delta = glGetUniformLocation(ctx->program, "iTimeDelta");
+  ctx->u_frame = glGetUniformLocation(ctx->program, "iFrame");
+  ctx->u_frame_rate = glGetUniformLocation(ctx->program, "iFrameRate");
   ctx->u_mouse = glGetUniformLocation(ctx->program, "iMouse");
   ctx->u_mouse_pos = glGetUniformLocation(ctx->program, "iMousePos");
+  ctx->u_date = glGetUniformLocation(ctx->program, "iDate");
 
   // Get uniform locations for iChannel0-3
-  char name[16];
   for (int i = 0; i < 4; i++) {
+    char name[16];
     snprintf(name, sizeof(name), "iChannel%d", i);
-    ctx->u_textures[i] = glGetUniformLocation(ctx->program, name);
+    ctx->u_channel[i] = glGetUniformLocation(ctx->program, name);
+  }
+
+  // Get channel resolution uniforms
+  for (int i = 0; i < 4; i++) {
+    char name[32];
+    snprintf(name, sizeof(name), "iChannelResolution[%d]", i);
+    ctx->u_channel_res[i] = glGetUniformLocation(ctx->program, name);
   }
 
   // Bind textures for all channels
@@ -262,7 +281,7 @@ error:
   return NULL;
 }
 
-void shader_render(shader_context *ctx, double time, iMouse *mouse,
+void shader_render(shader_context *ctx, double current_time, iMouse *mouse,
                    unsigned char *image_data, int image_width,
                    int image_height) {
   if (!ctx || !ctx->initialized)
@@ -278,6 +297,40 @@ void shader_render(shader_context *ctx, double time, iMouse *mouse,
   // Use shader program
   glUseProgram(ctx->program);
 
+  // Calculate delta time and fps
+  double delta = (ctx->frame == 0) ? 0 : (current_time - ctx->last_time);
+  float fps = (delta > 0) ? (1.0f / delta) : 0;
+
+  // Update state for next frame
+  ctx->last_time = current_time;
+  ctx->frame++;
+
+  if (ctx->u_resolution >= 0)
+    glUniform3f(ctx->u_resolution, (float)ctx->width, (float)ctx->height,
+                (float)ctx->width / ctx->height);
+  if (ctx->u_time >= 0)
+    glUniform1f(ctx->u_time, (float)current_time);
+  if (ctx->u_time_delta >= 0)
+    glUniform1f(ctx->u_time_delta, (float)delta);
+  if (mouse) {
+    if (ctx->u_mouse >= 0)
+      glUniform4f(ctx->u_mouse, mouse->x, mouse->y, mouse->z, mouse->w);
+    if (ctx->u_mouse_pos >= 0)
+      glUniform2f(ctx->u_mouse_pos, mouse->real_x, mouse->real_y);
+  }
+  if (ctx->u_frame >= 0)
+    glUniform1i(ctx->u_frame, ctx->frame);
+  if (ctx->u_frame_rate >= 0)
+    glUniform1f(ctx->u_frame_rate, fps);
+  if (ctx->u_date >= 0) {
+    // Get current date/time
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    float seconds = tm->tm_sec + tm->tm_min * 60 + tm->tm_hour * 3600;
+    glUniform4f(ctx->u_date, (float)(tm->tm_year + 1900), (float)tm->tm_mon,
+                (float)tm->tm_mday, seconds);
+  }
+
   // Bind textures
   for (int i = 0; i < 4; ++i) {
     if (!ctx->textures[i] || !ctx->texture_names[i])
@@ -286,25 +339,16 @@ void shader_render(shader_context *ctx, double time, iMouse *mouse,
     glActiveTexture(GL_TEXTURE0 + i);
     glBindTexture(GL_TEXTURE_2D, ctx->texture_names[i]);
 
-    // Set sampler uniform
-    if (ctx->u_textures[i] >= 0) {
-      glUniform1i(ctx->u_textures[i], i);
+    // Set channel uniform
+    if (ctx->u_channel[i] >= 0) {
+      glUniform1i(ctx->u_channel[i], i);
     }
-  }
 
-  if (ctx->u_resolution >= 0) {
-    glUniform3f(ctx->u_resolution, (float)ctx->width, (float)ctx->height,
-                (float)ctx->width / ctx->height);
-  }
-  if (ctx->u_time >= 0) {
-    glUniform1f(ctx->u_time, (float)time);
-  }
-  if (mouse) {
-    if (ctx->u_mouse >= 0) {
-      glUniform4f(ctx->u_mouse, mouse->x, mouse->y, mouse->z, mouse->w);
-    }
-    if (ctx->u_mouse_pos >= 0) {
-      glUniform2f(ctx->u_mouse_pos, mouse->real_x, mouse->real_y);
+    // Set channel resolution uniform
+    if (ctx->u_channel_res[i] >= 0) {
+      glUniform3f(ctx->u_channel_res[i], (float)ctx->textures[i]->width,
+                  (float)ctx->textures[i]->height,
+                  (float)ctx->textures[i]->width / ctx->textures[i]->height);
     }
   }
 
