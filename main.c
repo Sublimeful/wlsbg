@@ -192,8 +192,12 @@ static void output_mode(void *data, struct wl_output *wl_output, uint32_t flags,
 
 static void output_done(void *data, struct wl_output *wl_output) {
   struct output *output = data;
-  struct state *state = output->state;
+  if (output->surface) {
+    /* output has already been given a surface */
+    return;
+  }
 
+  struct state *state = output->state;
   bool wildcard = !strcmp(state->output_name, "*");
   if (wildcard || (output->name && !strcmp(output->name, state->output_name))) {
     output->surface = wl_compositor_create_surface(state->compositor);
@@ -320,11 +324,12 @@ static void registry_global(void *data, struct wl_registry *registry,
 
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     state->compositor =
-        wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+        wl_registry_bind(registry, name, &wl_compositor_interface, 1);
   } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
     state->layer_shell =
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
-  } else if (strcmp(interface, wl_output_interface.name) == 0) {
+  } else if (strcmp(interface, wl_output_interface.name) == 0 && version >= 4) {
+    // Only accept version >= 4 outputs, as those provide their name/description
     struct output *output = calloc(1, sizeof(struct output));
     output->state = state;
     output->wl_name = name;
@@ -333,7 +338,7 @@ static void registry_global(void *data, struct wl_registry *registry,
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
   } else if (strcmp(interface, wl_seat_interface.name) == 0) {
-    state->seat = wl_registry_bind(registry, name, &wl_seat_interface, 4);
+    state->seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
     wl_seat_add_listener(state->seat, &seat_listener, state);
   }
 }
@@ -378,8 +383,10 @@ int main(int argc, char *argv[]) {
       return EXIT_SUCCESS;
     case 'f':
       state.fps = atof(optarg);
-      if (state.fps <= 0)
+      if (state.fps <= 0) {
         state.fps = DEFAULT_FPS;
+        fprintf(stderr, "FPS must be a valid number >0, defaulting to 60fps\n");
+      }
       break;
     case 'l':
       if (strcmp(optarg, "background") == 0) {
@@ -441,7 +448,16 @@ int main(int argc, char *argv[]) {
   double frame_time = 1.0 / state.fps;
   struct timespec next_frame = state.start_time;
 
-  while (wl_display_dispatch_pending(state.display) != -1) {
+  while (true) {
+    if (wl_display_dispatch_pending(state.display) == -1) {
+      fprintf(stderr, "Failed to dispatch events\n");
+      break;
+    }
+    if (wl_display_flush(state.display) == -1 && errno != EAGAIN) {
+      fprintf(stderr, "Failed to flush\n");
+      break;
+    }
+
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
 
@@ -459,8 +475,12 @@ int main(int argc, char *argv[]) {
     }
 
     if (pfd.revents & POLLIN) {
-      if (wl_display_dispatch(state.display) == -1) {
-        fprintf(stderr, "Failed to dispatch events\n");
+      if (wl_display_prepare_read(state.display) == -1) {
+        fprintf(stderr, "Failed to prepare read\n");
+        break;
+      }
+      if (wl_display_read_events(state.display) == -1) {
+        fprintf(stderr, "Failed to read events\n");
         break;
       }
     }
