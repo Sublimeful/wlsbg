@@ -13,10 +13,15 @@
 #define USAGE_STRING                                                           \
   "Usage: wlsbg [-h|--fps F|--layer L] [OUTPUT] SHADER.frag\n"
 
-static const struct option options[] = {{"help", no_argument, NULL, 'h'},
-                                        {"fps", required_argument, NULL, 'f'},
-                                        {"layer", required_argument, NULL, 'l'},
-                                        {0, 0, NULL, 0}};
+static const struct option options[] = {
+    {"help", no_argument, NULL, 'h'},
+    {"fps", required_argument, NULL, 'f'},
+    {"layer", required_argument, NULL, 'l'},
+    {"channel0", required_argument, NULL, '0'},
+    {"channel1", required_argument, NULL, '1'},
+    {"channel2", required_argument, NULL, '2'},
+    {"channel3", required_argument, NULL, '3'},
+    {0, 0, 0, 0}};
 
 struct state {
   struct wl_display *display;
@@ -32,6 +37,8 @@ struct state {
   float fps;
   enum zwlr_layer_shell_v1_layer layer;
   struct timespec start_time;
+
+  char *texture_paths[4];
 
   // Track mouse positions
   struct {
@@ -116,7 +123,7 @@ static void layer_surface_configure(void *data,
     // First configure: create shader context
     output->shader_ctx =
         shader_create(state->display, output->surface, state->shader_path,
-                      output->width, output->height);
+                      output->width, output->height, state->texture_paths);
     if (!output->shader_ctx) {
       fprintf(stderr, "Failed to create shader context\n");
       exit(EXIT_FAILURE);
@@ -343,7 +350,8 @@ int main(int argc, char *argv[]) {
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hf:l:", options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hf:l:0:1:2:3:", options, NULL)) !=
+         -1) {
     switch (opt) {
     case 'h':
       printf(USAGE_STRING);
@@ -364,6 +372,14 @@ int main(int argc, char *argv[]) {
         state.layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
       }
       break;
+    case '0':
+    case '1':
+    case '2':
+    case '3': {
+      unsigned char channel = opt - '0';
+      state.texture_paths[channel] = optarg;
+      break;
+    }
     default:
       fprintf(stderr, USAGE_STRING);
       return EXIT_FAILURE;

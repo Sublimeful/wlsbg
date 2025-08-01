@@ -1,4 +1,7 @@
+#define STB_IMAGE_IMPLEMENTATION
+
 #include "shader.h"
+#include "stb_image.h"
 #include <GLES3/gl3.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,7 +62,8 @@ static GLuint compile_shader(GLenum type, const char *source) {
 
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface,
-                              const char *shader_path, int width, int height) {
+                              const char *shader_path, int width, int height,
+                              char *texture_paths[4]) {
   shader_context *ctx = calloc(1, sizeof(shader_context));
   if (!ctx)
     return NULL;
@@ -147,6 +151,9 @@ shader_context *shader_create(struct wl_display *display,
           "uniform vec4 iMouse;\n"
           "uniform vec2 iMousePos;\n"
           "uniform sampler2D iChannel0;\n"
+          "uniform sampler2D iChannel1;\n"
+          "uniform sampler2D iChannel2;\n"
+          "uniform sampler2D iChannel3;\n"
           "out vec4 fragColor;\n"
           "%s\n"
           "void main() {\n"
@@ -187,13 +194,6 @@ shader_context *shader_create(struct wl_display *display,
     goto error;
   }
 
-  // Get uniform locations
-  ctx->u_resolution = glGetUniformLocation(ctx->program, "iResolution");
-  ctx->u_time = glGetUniformLocation(ctx->program, "iTime");
-  ctx->u_mouse = glGetUniformLocation(ctx->program, "iMouse");
-  ctx->u_mouse_pos = glGetUniformLocation(ctx->program, "iMousePos");
-  ctx->u_texture = glGetUniformLocation(ctx->program, "iChannel0");
-
   // Create vertex buffer
   glGenVertexArrays(1, &ctx->vao);
   glGenBuffers(1, &ctx->vbo);
@@ -205,13 +205,53 @@ shader_context *shader_create(struct wl_display *display,
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
-  // Create texture for input image (if needed)
-  glGenTextures(1, &ctx->texture);
-  glBindTexture(GL_TEXTURE_2D, ctx->texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  // Get uniform locations
+  ctx->u_resolution = glGetUniformLocation(ctx->program, "iResolution");
+  ctx->u_time = glGetUniformLocation(ctx->program, "iTime");
+  ctx->u_mouse = glGetUniformLocation(ctx->program, "iMouse");
+  ctx->u_mouse_pos = glGetUniformLocation(ctx->program, "iMousePos");
+
+  // Get uniform locations for iChannel0-3
+  char name[16];
+  for (int i = 0; i < 4; i++) {
+    snprintf(name, sizeof(name), "iChannel%d", i);
+    ctx->u_textures[i] = glGetUniformLocation(ctx->program, name);
+  }
+
+  // Bind textures for all channels
+  for (int i = 0; i < 4; i++) {
+    // Load texture if path is specified
+    char *path = texture_paths[i];
+    if (!path)
+      continue;
+
+    int width;
+    int height;
+    unsigned char *data =
+        stbi_load(path, &width, &height, NULL, STBI_rgb_alpha);
+    if (!data) {
+      fprintf(stderr,
+              "Texture could not be loaded at %s, is there a file there?\n",
+              path);
+      continue;
+    }
+
+    shader_texture *texture = malloc(sizeof(shader_texture));
+    texture->data = data;
+    texture->width = width;
+    texture->height = height;
+    ctx->textures[i] = texture;
+
+    glGenTextures(1, &ctx->texture_names[i]);
+    glBindTexture(GL_TEXTURE_2D, ctx->texture_names[i]);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->textures[i]->width,
+                 ctx->textures[i]->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 ctx->textures[i]->data);
+  }
 
   ctx->initialized = true;
   return ctx;
@@ -234,17 +274,23 @@ void shader_render(shader_context *ctx, double time, iMouse *mouse,
   // Set viewport
   glViewport(0, 0, ctx->width, ctx->height);
 
-  // Upload texture if image data provided
-  if (image_data) {
-    glBindTexture(GL_TEXTURE_2D, ctx->texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-  }
-
   // Use shader program
   glUseProgram(ctx->program);
 
-  // Set uniforms
+  // Bind textures
+  for (int i = 0; i < 4; ++i) {
+    if (!ctx->textures[i] || !ctx->texture_names[i])
+      continue;
+
+    glActiveTexture(GL_TEXTURE0 + i);
+    glBindTexture(GL_TEXTURE_2D, ctx->texture_names[i]);
+
+    // Set sampler uniform
+    if (ctx->u_textures[i] >= 0) {
+      glUniform1i(ctx->u_textures[i], i);
+    }
+  }
+
   if (ctx->u_resolution >= 0) {
     glUniform3f(ctx->u_resolution, (float)ctx->width, (float)ctx->height,
                 (float)ctx->width / ctx->height);
@@ -259,11 +305,6 @@ void shader_render(shader_context *ctx, double time, iMouse *mouse,
     if (ctx->u_mouse_pos >= 0) {
       glUniform2f(ctx->u_mouse_pos, mouse->real_x, mouse->real_y);
     }
-  }
-  if (ctx->u_texture >= 0) {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ctx->texture);
-    glUniform1i(ctx->u_texture, 0);
   }
 
   // Draw
@@ -293,8 +334,16 @@ void shader_destroy(shader_context *ctx) {
 
     if (ctx->program)
       glDeleteProgram(ctx->program);
-    if (ctx->texture)
-      glDeleteTextures(1, &ctx->texture);
+
+    for (int i = 0; i < 4; ++i) {
+      if (!ctx->textures[i])
+        continue;
+      stbi_image_free(ctx->textures[i]->data);
+      free(ctx->textures[i]);
+      ctx->textures[i] = NULL;
+    }
+    glDeleteTextures(4, ctx->texture_names);
+
     if (ctx->vao)
       glDeleteVertexArrays(1, &ctx->vao);
     if (ctx->vbo)
