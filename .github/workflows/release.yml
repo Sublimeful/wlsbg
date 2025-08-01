@@ -18,9 +18,7 @@ jobs:
             meson \
             libwayland-dev \
             wayland-protocols \
-            libcairo2-dev \
             libegl1-mesa-dev \
-            libgdk-pixbuf-2.0-dev \
             scdoc
       - name: setup
         run: meson build/ --fatal-meson-warnings -Dauto_features=enabled

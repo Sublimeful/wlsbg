@@ -9,12 +9,29 @@
 #include <string.h>
 #include <time.h>
 
+// clang-format off
+#define USAGE_STRING                                                          \
+  "Usage: wlsbg <options...> [OUTPUT] SHADER.frag\n"                          \
+  "\n"                                                                        \
+	"Options:\n"																																\
+  "  -h,     --help                   Show help message and quit.\n"          \
+  "  -v,     --version                Show the version number and quit.\n"    \
+  "  -f,     --fps <int>              Max FPS limit of the shader.\n"         \
+  "  -l,     --layer <layer>          Set the layer to display on.\n"         \
+  "  -[0-3], --channel[0-3] <path>    Set the texture for a channel.\n"       \
+  "\n"                                                                        \
+	"Required Arguments:\n"																											\
+  "  [OUTPUT] - Set the output to operate on or '*' for all.\n"								\
+	"\n"																																				\
+  "Layer Types:\n"                                                            \
+  "  background, bottom, top, or overlay\n"
+// clang-format on
+
 #define DEFAULT_FPS 60
-#define USAGE_STRING                                                           \
-  "Usage: wlsbg [-h|--fps F|--layer L] [OUTPUT] SHADER.frag\n"
 
 static const struct option options[] = {
     {"help", no_argument, NULL, 'h'},
+    {"version", no_argument, NULL, 'v'},
     {"fps", required_argument, NULL, 'f'},
     {"layer", required_argument, NULL, 'l'},
     {"channel0", required_argument, NULL, '0'},
@@ -350,11 +367,14 @@ int main(int argc, char *argv[]) {
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hf:l:0:1:2:3:", options, NULL)) !=
+  while ((opt = getopt_long(argc, argv, "hvf:l:0:1:2:3:", options, NULL)) !=
          -1) {
     switch (opt) {
     case 'h':
       printf(USAGE_STRING);
+      return EXIT_SUCCESS;
+    case 'v':
+      printf("wlsbg version " WLSBG_VERSION "\n");
       return EXIT_SUCCESS;
     case 'f':
       state.fps = atof(optarg);

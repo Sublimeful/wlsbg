@@ -219,6 +219,7 @@ shader_context *shader_create(struct wl_display *display,
   }
 
   // Bind textures for all channels
+  stbi_set_flip_vertically_on_load(true);
   for (int i = 0; i < 4; i++) {
     // Load texture if path is specified
     char *path = texture_paths[i];
