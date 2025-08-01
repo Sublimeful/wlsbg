@@ -1,2 +1,1 @@
-option('gdk-pixbuf', type: 'feature', value: 'auto', description: 'Enable support for more image formats')
 option('man-pages', type: 'feature', value: 'auto', description: 'Generate and install man pages')
