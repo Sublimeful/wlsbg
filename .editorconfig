@@ -7,7 +7,7 @@ charset = utf-8
 end_of_line = lf
 
 [*.{c,h,cmake,txt}]
-indent_style = tab
+indent_style = space
 indent_size = 2
 
 [*.{xml,yml}]
