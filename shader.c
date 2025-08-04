@@ -23,6 +23,26 @@ static const char *vertex_shader_source =
     "    gl_Position = vec4(position, 0.0, 1.0);\n"
     "}\n";
 
+// static shader_texture *load_shader_texture(const char *path) {
+//   int width;
+//   int height;
+//
+//   stbi_set_flip_vertically_on_load(true);
+//   unsigned char *data = stbi_load(path, &width, &height, NULL, STBI_rgb_alpha);
+//   if (!data) {
+//     fprintf(stderr,
+//             "Texture could not be loaded at %s, is there a file there?\n",
+//             path);
+//     return NULL;
+//   }
+//
+//   shader_texture *texture = malloc(sizeof(shader_texture));
+//   texture->data = data;
+//   texture->width = width;
+//   texture->height = height;
+//   return texture;
+// }
+
 static char *load_shader_file(const char *path) {
   FILE *file = fopen(path, "rb");
   if (!file)
@@ -64,7 +84,7 @@ static GLuint compile_shader(GLenum type, const char *source) {
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface,
                               const char *shader_path, int width, int height,
-                              char *texture_paths[4]) {
+                              char *channel_input[4]) {
   shader_context *ctx = calloc(1, sizeof(shader_context));
   if (!ctx)
     return NULL;
@@ -144,7 +164,7 @@ shader_context *shader_create(struct wl_display *display,
   if (!frag_source)
     goto error;
 
-  // Create fragment shader with Shadertoy compatibility
+  // Create fragment shader
   char *full_frag_source = malloc(strlen(frag_source) + 1024);
   sprintf(full_frag_source,
           "#version 320 es\n"
@@ -237,40 +257,8 @@ shader_context *shader_create(struct wl_display *display,
     ctx->u_channel_res[i] = glGetUniformLocation(ctx->program, name);
   }
 
-  // Bind textures for all channels
-  stbi_set_flip_vertically_on_load(true);
   for (int i = 0; i < 4; i++) {
-    // Load texture if path is specified
-    char *path = texture_paths[i];
-    if (!path)
-      continue;
-
-    int width;
-    int height;
-    unsigned char *data =
-        stbi_load(path, &width, &height, NULL, STBI_rgb_alpha);
-    if (!data) {
-      fprintf(stderr,
-              "Texture could not be loaded at %s, is there a file there?\n",
-              path);
-      continue;
-    }
-
-    shader_texture *texture = malloc(sizeof(shader_texture));
-    texture->data = data;
-    texture->width = width;
-    texture->height = height;
-    ctx->textures[i] = texture;
-
-    glGenTextures(1, &ctx->texture_names[i]);
-    glBindTexture(GL_TEXTURE_2D, ctx->texture_names[i]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->textures[i]->width,
-                 ctx->textures[i]->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 ctx->textures[i]->data);
+    ctx->channel[i] = NULL;
   }
 
   ctx->initialized = true;
@@ -331,27 +319,6 @@ void shader_render(shader_context *ctx, double current_time, iMouse *mouse,
                 (float)tm->tm_mday, seconds);
   }
 
-  // Bind textures
-  for (int i = 0; i < 4; ++i) {
-    if (!ctx->textures[i] || !ctx->texture_names[i])
-      continue;
-
-    glActiveTexture(GL_TEXTURE0 + i);
-    glBindTexture(GL_TEXTURE_2D, ctx->texture_names[i]);
-
-    // Set channel uniform
-    if (ctx->u_channel[i] >= 0) {
-      glUniform1i(ctx->u_channel[i], i);
-    }
-
-    // Set channel resolution uniform
-    if (ctx->u_channel_res[i] >= 0) {
-      glUniform3f(ctx->u_channel_res[i], (float)ctx->textures[i]->width,
-                  (float)ctx->textures[i]->height,
-                  (float)ctx->textures[i]->width / ctx->textures[i]->height);
-    }
-  }
-
   // Draw
   glBindVertexArray(ctx->vao);
   glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -379,15 +346,6 @@ void shader_destroy(shader_context *ctx) {
 
     if (ctx->program)
       glDeleteProgram(ctx->program);
-
-    for (int i = 0; i < 4; ++i) {
-      if (!ctx->textures[i])
-        continue;
-      stbi_image_free(ctx->textures[i]->data);
-      free(ctx->textures[i]);
-      ctx->textures[i] = NULL;
-    }
-    glDeleteTextures(4, ctx->texture_names);
 
     if (ctx->vao)
       glDeleteVertexArrays(1, &ctx->vao);

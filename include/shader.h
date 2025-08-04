@@ -6,6 +6,7 @@
 #include <GL/gl.h>
 #include <stdbool.h>
 #include <wayland-client-protocol.h>
+#include "shader_channel.h"
 
 typedef struct {
   float real_x;
@@ -16,10 +17,6 @@ typedef struct {
   float w;
 } iMouse;
 
-typedef struct {
-  unsigned char *data;
-  int width, height;
-} shader_texture;
 
 typedef struct {
   EGLDisplay egl_display;
@@ -28,12 +25,10 @@ typedef struct {
   struct wl_egl_window *egl_window;
   EGLSurface egl_surface;
 
-  // Textures
-  shader_texture *textures[4];
-
   GLuint program;
   GLuint vao, vbo;
-  GLuint texture_names[4]; // Array for iChannel0-iChannel3
+
+  shader_channel* channel[4]; // A, B, C, D
 
   // Uniforms
   GLint u_resolution;
@@ -56,7 +51,7 @@ typedef struct {
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface,
                               const char *shader_path, int width, int height,
-                              char *texture_paths[4]);
+                              char *channel_input[4]);
 void shader_render(shader_context *ctx, double current_time, iMouse *mouse,
                    unsigned char *image_data, int image_width,
                    int image_height);

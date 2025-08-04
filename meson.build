@@ -82,20 +82,37 @@ foreach filename : client_protocols
   protos_src += wayland_scanner_client.process(filename)
 endforeach
 
+dependencies = [
+  math,
+  wayland_egl,
+  opengl,
+  egl,
+]
+
+shader_channel_test = executable(
+  'shader_channel_test',
+  [
+    'test/unit/shader_channel/main.c',
+    'shader_channel.c',
+    protos_src,
+  ],
+  include_directories: 'include',
+  dependencies: dependencies,
+  install: true
+)
+
+test('shader_channel_test', shader_channel_test)
+
 executable(
   'wlsbg',
   [
     'main.c',
     'shader.c',
+    'shader_channel.c',
     protos_src,
   ],
   include_directories: 'include',
-  dependencies: [
-    math,
-    wayland_egl,
-    opengl,
-    egl,
-  ],
+  dependencies: dependencies,
   install: true
 )
 

@@ -55,7 +55,7 @@ struct state {
   enum zwlr_layer_shell_v1_layer layer;
   struct timespec start_time;
 
-  char *texture_paths[4];
+  char *channel_input[4];
 
   // Track mouse positions
   struct {
@@ -140,7 +140,7 @@ static void layer_surface_configure(void *data,
     // First configure: create shader context
     output->shader_ctx =
         shader_create(state->display, output->surface, state->shader_path,
-                      output->width, output->height, state->texture_paths);
+                      output->width, output->height, state->channel_input);
     if (!output->shader_ctx) {
       fprintf(stderr, "Failed to create shader context\n");
       exit(EXIT_FAILURE);
@@ -404,7 +404,7 @@ int main(int argc, char *argv[]) {
     case '2':
     case '3': {
       unsigned char channel = opt - '0';
-      state.texture_paths[channel] = optarg;
+      state.channel_input[channel] = optarg;
       break;
     }
     default:
