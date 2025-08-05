@@ -248,14 +248,11 @@ shader_context *shader_create(struct wl_display *display,
   registry_free(registry);
 
   // Initialize main buffer
-  ctx->shared_shader_path =
-      shared_shader_path ? strdup(shared_shader_path) : NULL;
   ctx->buf->shader_path = shader_path ? strdup(shader_path) : NULL;
   if (!ctx->buf->shader_path) {
     goto error;
   }
-
-  if (!init_shader_buffer(ctx->buf, width, height, ctx->shared_shader_path)) {
+  if (!init_shader_buffer(ctx->buf, width, height, shared_shader_path)) {
     goto error;
   }
 
@@ -324,6 +321,5 @@ void shader_destroy(shader_context *ctx) {
     eglTerminate(ctx->egl_display);
   }
 
-  free(ctx->shared_shader_path);
   free(ctx);
 }

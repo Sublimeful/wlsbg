@@ -197,8 +197,11 @@ GLuint get_channel_texture(shader_channel *channel) {
 
 bool init_channel_recursive(shader_channel *channel, int width, int height,
                             char *shared_shader_path) {
-  if (!channel || channel->initialized)
+  if (!channel)
     return false;
+
+  if (channel->initialized)
+    return true;
   channel->initialized = true;
 
   switch (channel->type) {

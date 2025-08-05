@@ -19,7 +19,6 @@ struct _shader_context {
 
   GLuint vao, vbo;
 
-  char *shared_shader_path;
   shader_buffer *buf;
 
   bool initialized;

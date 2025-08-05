@@ -1,7 +1,7 @@
 project(
   'wlsbg',
   'c',
-  version: '2.0.0',
+  version: '3.0.0',
   license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
@@ -88,26 +88,6 @@ dependencies = [
   opengl,
   egl,
 ]
-
-shader_channel_test = executable(
-  'shader_channel_test',
-  [
-    'test/unit/shader_channel/main.c',
-    'shader.c',
-    'shader_buffer.c',
-    'shader_channel.c',
-    'shader_texture.c',
-    'shader_uniform.c',
-    'resource_registry.c',
-    'util.c',
-    protos_src,
-  ],
-  include_directories: 'include',
-  dependencies: dependencies,
-  install: true
-)
-
-test('shader_channel_test', shader_channel_test)
 
 executable(
   'wlsbg',
