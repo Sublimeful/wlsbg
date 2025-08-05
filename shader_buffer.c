@@ -20,14 +20,16 @@ void free_shader_buffer(shader_buffer *buf) {
   free(buf);
 }
 
-bool init_shader_buffer(shader_buffer *buf, int width, int height) {
+bool init_shader_buffer(shader_buffer *buf, int width, int height,
+                        char *shared_shader_path) {
   buf->width = width;
   buf->height = height;
   buf->frame = 0;
   buf->last_time = 0;
   buf->render_parity = 0;
 
-  if (!compile_and_link_program(&buf->program, buf->shader_path)) {
+  if (!compile_and_link_program(&buf->program, buf->shader_path,
+                                shared_shader_path)) {
     return false;
   }
 
@@ -56,7 +58,8 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height) {
   // Initialize buffer channels
   for (int i = 0; i < 4; i++) {
     if (buf->channel[i]) {
-      init_channel_recursive(buf->channel[i], width, height);
+      init_channel_recursive(buf->channel[i], width, height,
+                             shared_shader_path);
     }
   }
 

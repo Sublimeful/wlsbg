@@ -1,6 +1,5 @@
 #include "resource_registry.h"
 #include "shader_channel.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 

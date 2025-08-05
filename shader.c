@@ -1,7 +1,7 @@
-#include "resource_registry.h"
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "shader.h"
+#include "resource_registry.h"
 #include "shader_buffer.h"
 #include "shader_channel.h"
 #include "shader_uniform.h"
@@ -42,6 +42,7 @@ static const char *FRAGMENT_SHADER_TEMPLATE =
     "uniform vec3 iChannelResolution[4];\n"
     "out vec4 fragColor;\n"
     "%s\n"
+    "%s\n"
     "void main() {\n"
     "    mainImage(fragColor, gl_FragCoord.xy);\n"
     "}\n";
@@ -70,17 +71,27 @@ GLuint compile_shader(GLenum type, const char *source) {
   return shader;
 }
 
-bool compile_and_link_program(GLuint *program, char *shader_path) {
+bool compile_and_link_program(GLuint *program, char *shader_path,
+                              char *shared_shader_path) {
   char *fragment_shader_shard = load_file(shader_path);
   if (!fragment_shader_shard)
     return false;
 
+  char *shared_fragment_file = load_file(shared_shader_path);
+  char *shared_fragment_shard;
+  if (shared_fragment_file)
+    shared_fragment_shard = shared_fragment_file;
+  else
+    shared_fragment_shard = "";
+
   // Create fragment shader
-  char *fragment_shader_source = malloc(strlen(fragment_shader_shard) + 1024);
+  char *fragment_shader_source = malloc(strlen(shared_fragment_shard) +
+                                        strlen(fragment_shader_shard) + 1024);
   sprintf(fragment_shader_source, FRAGMENT_SHADER_TEMPLATE,
-          fragment_shader_shard);
+          shared_fragment_shard, fragment_shader_shard);
 
   free(fragment_shader_shard);
+  free(shared_fragment_file);
 
   GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
   GLuint fragment_shader =
@@ -119,7 +130,8 @@ bool compile_and_link_program(GLuint *program, char *shader_path) {
 
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface, char *shader_path,
-                              int width, int height, char *channel_input[4]) {
+                              char *shared_shader_path, int width, int height,
+                              char *channel_input[4]) {
   shader_context *ctx = calloc(1, sizeof(shader_context));
   if (!ctx)
     return NULL;
@@ -205,7 +217,6 @@ shader_context *shader_create(struct wl_display *display,
 
   // Allocate main buffer
   ctx->buf = malloc(sizeof(shader_buffer));
-  ctx->buf->shader_path = shader_path;
   for (int i = 0; i < 4; i++) {
     if (!channel_input[i])
       continue;
@@ -215,7 +226,8 @@ shader_context *shader_create(struct wl_display *display,
   free(registry);
 
   // Initialize main buffer
-  init_shader_buffer(ctx->buf, width, height);
+  ctx->buf->shader_path = shader_path;
+  init_shader_buffer(ctx->buf, width, height, shared_shader_path);
 
   ctx->initialized = true;
   return ctx;

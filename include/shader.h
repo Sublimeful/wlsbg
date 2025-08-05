@@ -19,6 +19,7 @@ struct _shader_context {
 
   GLuint vao, vbo;
 
+  char *shared_shader_path;
   shader_buffer *buf;
 
   bool initialized;
@@ -28,12 +29,14 @@ typedef struct _shader_context shader_context;
 
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface, char *shader_path,
-                              int width, int height, char *channel_input[4]);
+                              char *shared_shader_path, int width, int height,
+                              char *channel_input[4]);
 void shader_render(shader_context *ctx, double current_time, iMouse *mouse);
 void shader_resize(shader_context *ctx, int width, int height);
 void shader_destroy(shader_context *ctx);
 
 GLuint compile_shader(GLenum type, const char *source);
-bool compile_and_link_program(GLuint *program, char *shader_path);
+bool compile_and_link_program(GLuint *program, char *shader_path,
+                              char *shared_shader_path);
 
 #endif

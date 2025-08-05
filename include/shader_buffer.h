@@ -26,7 +26,8 @@ struct _shader_buffer {
 typedef struct _shader_buffer shader_buffer;
 
 void free_shader_buffer(shader_buffer *buf);
-bool init_shader_buffer(shader_buffer *buf, int width, int height);
+bool init_shader_buffer(shader_buffer *buf, int width, int height,
+                        char *shared_shader_path);
 void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
                           double current_time, iMouse *mouse);
 

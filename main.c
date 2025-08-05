@@ -35,6 +35,7 @@ static const struct option options[] = {
     {"version", no_argument, NULL, 'v'},
     {"fps", required_argument, NULL, 'f'},
     {"layer", required_argument, NULL, 'l'},
+    {"shared-shader", required_argument, NULL, 's'},
     {"channel0", required_argument, NULL, '0'},
     {"channel1", required_argument, NULL, '1'},
     {"channel2", required_argument, NULL, '2'},
@@ -52,6 +53,7 @@ struct state {
 
   char *output_name;
   char *shader_path;
+  char *shared_shader_path;
   float fps;
   enum zwlr_layer_shell_v1_layer layer;
   struct timespec start_time;
@@ -141,7 +143,8 @@ static void layer_surface_configure(void *data,
     // First configure: create shader context
     output->shader_ctx =
         shader_create(state->display, output->surface, state->shader_path,
-                      output->width, output->height, state->channel_input);
+                      state->shared_shader_path, output->width, output->height,
+                      state->channel_input);
     if (!output->shader_ctx) {
       fprintf(stderr, "Failed to create shader context\n");
       exit(EXIT_FAILURE);
@@ -373,7 +376,7 @@ int main(int argc, char *argv[]) {
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvf:l:0:1:2:3:", options, NULL)) !=
+  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:", options, NULL)) !=
          -1) {
     switch (opt) {
     case 'h':
@@ -399,6 +402,9 @@ int main(int argc, char *argv[]) {
       } else if (strcmp(optarg, "overlay") == 0) {
         state.layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
       }
+      break;
+    case 's':
+      state.shared_shader_path = optarg;
       break;
     case '0':
     case '1':

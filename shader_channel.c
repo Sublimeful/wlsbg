@@ -195,7 +195,8 @@ GLuint get_channel_texture(shader_channel *channel) {
   return 0;
 }
 
-void init_channel_recursive(shader_channel *channel, int width, int height) {
+void init_channel_recursive(shader_channel *channel, int width, int height,
+                            char *shared_shader_path) {
   if (!channel || channel->initialized)
     return;
   channel->initialized = true;
@@ -207,7 +208,7 @@ void init_channel_recursive(shader_channel *channel, int width, int height) {
     }
     break;
   case BUFFER:
-    if (!init_shader_buffer(channel->buf, width, height)) {
+    if (!init_shader_buffer(channel->buf, width, height, shared_shader_path)) {
       free_shader_channel(channel);
       break;
     }
