@@ -11,21 +11,28 @@
 #include <time.h>
 
 // clang-format off
-#define USAGE_STRING                                                          \
-  "Usage: wlsbg <options...> [OUTPUT] SHADER.frag\n"                          \
-  "\n"                                                                        \
-	"Options:\n"																																\
-  "  -h,     --help                   Show help message and quit.\n"          \
-  "  -v,     --version                Show the version number and quit.\n"    \
-  "  -f,     --fps <int>              Max FPS limit of the shader.\n"         \
-  "  -l,     --layer <layer>          Set the layer to display on.\n"         \
-  "  -[0-9], --channel[0-9] <path>    Set the texture for a channel.\n"       \
-  "\n"                                                                        \
-	"Required Arguments:\n"																											\
-  "  [OUTPUT] - Set the output to operate on or '*' for all.\n"								\
-	"\n"																																				\
-  "Layer Types:\n"                                                            \
-  "  background, bottom, top, or overlay\n"
+#define USAGE_STRING                                                            \
+  "Usage: wlsbg <options...> [OUTPUT] SHADER.frag\n"                            \
+  "\n"                                                                          \
+	"Options:\n"																																  \
+  "  -h,     --help                   Show help message and quit.\n"            \
+  "  -v,     --version                Show the version number and quit.\n"      \
+  "  -f,     --fps <int>              Max FPS limit of the shader.\n"           \
+  "  -l,     --layer <layer>          Set the layer to display on.\n"           \
+  "  -s,     --shared-shader <path>   Set the shared shader file.\n"            \
+  "  -[0-9], --channel[0-9] <path>    Set the resource for a channel.\n"        \
+  "\n"                                                                          \
+	"Required Arguments:\n"																											  \
+  "  [OUTPUT] - Set the output to operate on or '*' for all.\n"								  \
+	"\n"																																				  \
+  "Layer Types:\n"                                                              \
+  "  background, bottom, top, or overlay\n"                                     \
+	"\n"																																				  \
+  "Channel Resources (More information can be found in the man page):\n"        \
+  "	- `t:<path>`: Load texture from image file\n"                               \
+  "	- `b:<path>`: Create shader buffer from fragment shader\n"                  \
+  "	- `(resources...)`: Nested buffer definitions\n"                            \
+  "	- `<T>Name:<path>`: Named resources, declared/parsed from left to right\n"
 // clang-format on
 
 #define DEFAULT_FPS 60
@@ -424,8 +431,8 @@ int main(int argc, char *argv[]) {
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:4:5:6:7:8:9:", options, NULL)) !=
-         -1) {
+  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:4:5:6:7:8:9:", options,
+                            NULL)) != -1) {
     switch (opt) {
     case 'h':
       printf(USAGE_STRING);

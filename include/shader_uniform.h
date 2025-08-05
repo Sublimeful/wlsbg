@@ -22,9 +22,9 @@ struct _shader_uniform {
   GLint time_delta; // Uniform location for iTimeDelta
   GLint mouse;
   GLint mouse_pos;
-  GLint frame;          // Uniform location for iFrame
-  GLint frame_rate;     // Uniform location for iFrameRate
-  GLint date;           // Uniform location for iDate
+  GLint frame;           // Uniform location for iFrame
+  GLint frame_rate;      // Uniform location for iFrameRate
+  GLint date;            // Uniform location for iDate
   GLint channel[10];     // Uniform locations for iChannel0-iChannel9
   GLint channel_res[10]; // Uniform locations for iChannelResolution
 };
