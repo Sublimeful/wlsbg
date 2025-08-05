@@ -32,7 +32,7 @@
   "	- `t:<path>`: Load texture from image file\n"                               \
   "	- `b:<path>`: Create shader buffer from fragment shader\n"                  \
   "	- `(resources...)`: Nested buffer definitions\n"                            \
-  "	- `<T>Name:<path>`: Named resources, declared/parsed from left to right\n"
+  "	- `<T>Name:<path>`: Named resources, parsed from left to right\n"
 // clang-format on
 
 #define DEFAULT_FPS 60

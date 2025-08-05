@@ -34,7 +34,7 @@ Displays a shader on specified outputs of your Wayland session with support for 
 	- `t:<path>`: Load texture from image file
 	- `b:<path>`: Create shader buffer from fragment shader
 	- `(resources...)`: Nested buffer definitions
-	- `tName:<path>`, `bName:<path>`, etc.: Named resources, declared/parsed from left to right
+	- `tName:<path>`, `bName:<path>`, etc.: Named resources, parsed from left to right
 
 # REQUIRED ARGUMENTS
 
