@@ -80,13 +80,11 @@ Channels support a powerful syntax for creating complex rendering pipelines:
 	- _iChannel0..9_           = samplerXX: input channels
 	- _iChannelResolution[10]_ = vec3[10]: channel resolutions
 
-# MOUSE UNIFORMS
-
-	- _iMouse.xy_      = Last mouse down position
-	- _abs(iMouse.zw)_ = Mouse position during last button click
-	- _sign(iMouse.z)_ = Whether mouse button is down
-	- _sign(iMouse.w)_ = Whether mouse button is clicked
-	- _iMousePos.xy_   = Current mouse position
+*About iMouse:*
+	- _iMouse.xy_              = Last mouse down position
+	- _abs(iMouse.zw)_         = Mouse position during last button click
+	- _sign(iMouse.z)_         = Whether mouse button is down
+	- _sign(iMouse.w)_         = Whether mouse button is clicked
 
 # EXAMPLES
 
