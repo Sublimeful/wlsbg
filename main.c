@@ -19,7 +19,7 @@
   "  -v,     --version                Show the version number and quit.\n"    \
   "  -f,     --fps <int>              Max FPS limit of the shader.\n"         \
   "  -l,     --layer <layer>          Set the layer to display on.\n"         \
-  "  -[0-3], --channel[0-3] <path>    Set the texture for a channel.\n"       \
+  "  -[0-9], --channel[0-9] <path>    Set the texture for a channel.\n"       \
   "\n"                                                                        \
 	"Required Arguments:\n"																											\
   "  [OUTPUT] - Set the output to operate on or '*' for all.\n"								\
@@ -40,6 +40,12 @@ static const struct option options[] = {
     {"channel1", required_argument, NULL, '1'},
     {"channel2", required_argument, NULL, '2'},
     {"channel3", required_argument, NULL, '3'},
+    {"channel4", required_argument, NULL, '4'},
+    {"channel5", required_argument, NULL, '5'},
+    {"channel6", required_argument, NULL, '6'},
+    {"channel7", required_argument, NULL, '7'},
+    {"channel8", required_argument, NULL, '8'},
+    {"channel9", required_argument, NULL, '9'},
     {0, 0, 0, 0}};
 
 struct state {
@@ -58,7 +64,7 @@ struct state {
   enum zwlr_layer_shell_v1_layer layer;
   struct timespec start_time;
 
-  char *channel_input[4];
+  char *channel_input[10];
 
   // Track mouse positions
   struct {
@@ -418,7 +424,7 @@ int main(int argc, char *argv[]) {
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:", options, NULL)) !=
+  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:4:5:6:7:8:9:", options, NULL)) !=
          -1) {
     switch (opt) {
     case 'h':
@@ -451,7 +457,13 @@ int main(int argc, char *argv[]) {
     case '0':
     case '1':
     case '2':
-    case '3': {
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9': {
       unsigned char channel = opt - '0';
       state.channel_input[channel] = optarg;
       break;

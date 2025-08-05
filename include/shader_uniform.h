@@ -25,8 +25,8 @@ struct _shader_uniform {
   GLint frame;          // Uniform location for iFrame
   GLint frame_rate;     // Uniform location for iFrameRate
   GLint date;           // Uniform location for iDate
-  GLint channel[4];     // Uniform locations for iChannel0-iChannel3
-  GLint channel_res[4]; // Uniform locations for iChannelResolution
+  GLint channel[10];     // Uniform locations for iChannel0-iChannel9
+  GLint channel_res[10]; // Uniform locations for iChannelResolution
 };
 
 typedef struct _shader_uniform shader_uniform;

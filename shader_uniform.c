@@ -15,15 +15,15 @@ void set_uniform_locations(GLuint program, shader_uniform *u) {
   u->mouse_pos = glGetUniformLocation(program, "iMousePos");
   u->date = glGetUniformLocation(program, "iDate");
 
-  // Get uniform locations for iChannel0-3
-  for (int i = 0; i < 4; i++) {
+  // Get uniform locations for iChannel0-9
+  for (int i = 0; i < 10; i++) {
     char name[16];
     snprintf(name, sizeof(name), "iChannel%d", i);
     u->channel[i] = glGetUniformLocation(program, name);
   }
 
   // Get channel resolution uniforms
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     char name[32];
     snprintf(name, sizeof(name), "iChannelResolution[%d]", i);
     u->channel_res[i] = glGetUniformLocation(program, name);

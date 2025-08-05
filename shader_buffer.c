@@ -10,7 +10,7 @@ void free_shader_buffer(shader_buffer *buf) {
   if (!buf)
     return;
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     if (buf->channel[i]) {
       free_shader_channel(buf->channel[i]);
       buf->channel[i] = NULL;
@@ -70,7 +70,7 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
   set_uniform_locations(buf->program, buf->u);
 
   // Initialize buffer channels
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     if (!buf->channel[i])
       continue;
     if (!init_channel_recursive(buf->channel[i], width, height,
@@ -91,7 +91,7 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   buf->render_parity = !buf->render_parity;
 
   // Recursively render inputs first
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     if (buf->channel[i] && buf->channel[i]->type == BUFFER &&
         buf->channel[i]->buf->render_parity != buf->render_parity) {
       render_shader_buffer(ctx, buf->channel[i]->buf, current_time, mouse);
@@ -112,7 +112,7 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   set_uniforms(buf, current_time, mouse);
 
   // Bind input textures
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     if (buf->channel[i]) {
       GLuint tex_id = get_channel_texture(buf->channel[i]);
       if (tex_id) {

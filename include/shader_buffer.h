@@ -18,7 +18,7 @@ struct _shader_buffer {
   GLuint fbo;
   GLuint textures[2];  // Double-buffered textures
   int current_texture; // 0 or 1
-  shader_channel *channel[4];
+  shader_channel *channel[10];
   shader_uniform *u;
   bool render_parity;
 };

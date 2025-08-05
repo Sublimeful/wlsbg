@@ -42,7 +42,7 @@ shader_channel *parse_token(const char *input, int *pos,
 
     if (input[*pos] != ')') {
       fprintf(stderr, "Invalid shader buffer syntax or too many channels for "
-                      "shader buffer (>4).\n");
+                      "shader buffer (>10).\n");
       exit(EXIT_FAILURE);
     }
     (*pos)++;

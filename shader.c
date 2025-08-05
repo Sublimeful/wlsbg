@@ -39,7 +39,13 @@ static const char *FRAGMENT_SHADER_TEMPLATE =
     "uniform sampler2D iChannel1;\n"
     "uniform sampler2D iChannel2;\n"
     "uniform sampler2D iChannel3;\n"
-    "uniform vec3 iChannelResolution[4];\n"
+    "uniform sampler2D iChannel4;\n"
+    "uniform sampler2D iChannel5;\n"
+    "uniform sampler2D iChannel6;\n"
+    "uniform sampler2D iChannel7;\n"
+    "uniform sampler2D iChannel8;\n"
+    "uniform sampler2D iChannel9;\n"
+    "uniform vec3 iChannelResolution[10];\n"
     "out vec4 fragColor;\n"
     "%s\n"
     "%s\n"
@@ -147,7 +153,7 @@ bool compile_and_link_program(GLuint *program, char *shader_path,
 shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface, char *shader_path,
                               char *shared_shader_path, int width, int height,
-                              char *channel_input[4]) {
+                              char *channel_input[10]) {
   shader_context *ctx = calloc(1, sizeof(shader_context));
   if (!ctx)
     return NULL;
@@ -239,7 +245,7 @@ shader_context *shader_create(struct wl_display *display,
     goto error;
   memset(ctx->buf, 0, sizeof(shader_buffer));
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 10; i++) {
     if (!channel_input[i])
       continue;
     ctx->buf->channel[i] = parse_channel_input(channel_input[i], &registry);
