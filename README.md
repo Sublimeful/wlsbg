@@ -1,32 +1,42 @@
 # wlsbg (Wayland Shader Background)
 
-wlsbg is a wallpaper utility for Wayland compositors. It is compatible with any Wayland
-compositor which implements the wlr-layer-shell protocol and `wl_output` version 4.
+wlsbg is an advanced wallpaper utility for Wayland compositors that supports complex shader pipelines with up to 10 input channels. It's compatible with any Wayland compositor implementing wlr-layer-shell protocol and `wl_output` version 4.
 
-See the man page, `wlsbg(1)`, for instructions on using wlsbg.
+## Features
 
-## Release Signatures
-
-Releases are published [on GitHub](https://github.com/Sublimeful/wlsbg/releases).
-wlsbg releases are managed independently of sway releases.
+- Multi-output support
+- Shader output support
+- Interaction uniforms
+- 10-channel input pipeline
+- Nested shader buffers
+- Shared shader includes
 
 ## Installation
 
+### Dependencies
+
+- meson\*
+- wayland
+- wayland-protocols\*
+- egl-mesa
+- [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (man pages)\*
+- git (version info)\*
+- stb_image (bundled)
+
+_\* Compile-time dependencies_
+
 ### Compiling from Source
 
-Install dependencies:
+```bash
+meson build/
+ninja -C build/
+sudo ninja -C build/ install
+```
 
-- meson \*
-- wayland
-- wayland-protocols \*
-- egl-mesa
-- [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (optional: man pages) \*
-- git (optional: version information) \*
+## Documentation
 
-_\* Compile-time dep_
+See `man wlsbg` or [online documentation](https://github.com/Sublimeful/wlsbg/wiki) for advanced usage.
 
-Run these commands:
+## Contributing
 
-    meson build/
-    ninja -C build/
-    sudo ninja -C build/ install
+Submit issues and PRs at [GitHub repository](https://github.com/Sublimeful/wlsbg)

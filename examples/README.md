@@ -1,14 +1,62 @@
-# Example shaders
+# wlsbg Examples
 
-Cyber Fuji 2020:
+## Basic Usage
 
-    wlsbg '*' <REPO_PATH>/examples/retro.frag
+```bash
+# Simple shader
+wlsbg '*' examples/retro.frag
 
-Pixelated Background:
+# Shader with texture input
+wlsbg -0 t:examples/kiki.jpg '*' examples/pixelate.frag
+```
 
-    wlsbg '*' -0 <REPO_PATH>/examples/kiki.jpg <REPO_PATH>/examples/pixelate.frag
+## Interactive Examples
 
-Shaders can also be controlled by the mouse.
-Try running this example and click around with the mouse:
+```bash
+# Mouse-controlled shader (click and drag)
+wlsbg '*' examples/mouse.frag
+```
 
-    wlsbg '*' <REPO_PATH>/examples/mouse.frag
+## Buffer Pipelines
+
+```bash
+# One pass processing pipeline
+wlsbg -0 bA:examples/buffer/simple/bufferA.frag \
+      '*' \
+      examples/buffer/simple/image.frag
+```
+
+```bash
+# Two-stage processing pipeline
+wlsbg -0 "(t:examples/kiki.jpg bA:examples/buffer/twopass/bufferA.frag)" \
+      -1 "(bA bB:examples/buffer/twopass/bufferB.frag)" \
+      -2 t:examples/kiki.jpg \
+      '*' \
+      examples/buffer/twopass/image.frag
+```
+
+```bash
+# Multi-pass rendering with 4 buffers
+wlsbg -0 "(bA:examples/buffer/multipass/bufferA.frag bB:examples/buffer/multipass/bufferB.frag bB)" \
+      -1 "(bB bC:examples/buffer/multipass/bufferC.frag bC)" \
+      -2 "(bC bD:examples/buffer/multipass/bufferD.frag)" \
+      -3 t:examples/chars.png \
+      -s examples/buffer/multipass/shared.frag \
+      '*' \
+      examples/buffer/multipass/image.frag
+
+# This configuration:
+# 1. Uses 4 nested shader buffers (A→B→C→D)
+# 2. Loads a texture (chars.png) into channel 3
+# 3. Uses shared.frag for shared functions
+# 4. Runs image.frag as output shader
+```
+
+## Channel Types
+
+| Syntax         | Description                 | Example                            |
+| -------------- | --------------------------- | ---------------------------------- |
+| `t:path`       | Texture from image          | `t:image.png`                      |
+| `b:path`       | Shader buffer               | `b:effect.frag`                    |
+| `<T>name:path` | Named resource              | `bBackground:bg.frag`              |
+| `(res...)`     | Nested buffer configuration | `(t:tex.jpg b:fx.frag b:out.frag)` |

@@ -8,7 +8,7 @@ wlsbg - Wayland Shader Background
 
 *wlsbg* <options...> [OUTPUT] SHADER.frag
 
-Displays a shader on specified outputs of your Wayland session.
+Displays a shader on specified outputs of your Wayland session with support for complex buffer pipelines.
 
 # OPTIONS
 
@@ -26,34 +26,70 @@ Displays a shader on specified outputs of your Wayland session.
 	Set the layer to display on, valid types are: _background_, _bottom_, _top_, or _overlay_.
 	Default is _background_.
 
-*-[0-3], --channel[0-3]* <path>
-	Set the texture for a specified channel.
-	This texture can be used in your shader by referencing the uniform.
+*-s, --shared-shader* <path>
+	Path to a common shader file containing shared functions/definitions.
+
+*-[0-9], --channel[0-9]* <resource>
+	Set the input for a specified channel (0-9) using shader buffer syntax:
+	- `t:<path>`: Load texture from image file
+	- `b:<path>`: Create shader buffer from fragment shader
+	- `(resources...)`: Nested buffer definitions
+	- `tName:<path>`, `bName:<path>`, etc.: Named resources, declared/parsed from left to right
 
 # REQUIRED ARGUMENTS
 
 *[OUTPUT]*
 	Select an output to configure. Subsequent appearance options will only
 	apply to this output. The special value '_\*_' selects all outputs.
-	Note: The single quotes around the asterisk are there to
-	prevent the shell from expanding the wildcard \* symbol.
 
 *[SHADER PATH]*
-	Specifies the path of a GLSL shader that will be displayed to the output.++
-	Supported shader uniforms:++
-		_iResolution_           - vec3, (displayWidth, displayHeight, aspectRatio).++
-		_iTime_                 - float, time elapsed (in seconds).++
-		_iTimeDelta_            - float, time since last frame (in seconds).++
-    	_iFrame_                - int, frame count since start.++
-		_iFrameRate_            - float, estimated frames per second.++
-		_iMouse_                - mouse.xy      = mouse position during last button down.++
-				              abs(mouse.zw) = mouse position during last button click.++
-				              sign(mouze.z) = button is down.++
-			                   sign(mouze.w) = button is clicked.++
-		_iMousePos_             - vec2, real time position of the mouse.++
-    	_iDate_                 - vec4, (year, month, day, time in seconds).++
-		_iChannel0..3_          - samplerXX, input channel. XX = 2D/Cube.++
-    	_iChannelResolution[4]_ - vec3 x 4, resolution of input textures, (width, height, aspectRatio).++
+	Path to the main fragment shader that will be displayed to the output.
+
+# SHADER BUFFER SYNTAX
+
+Channels support a powerful syntax for creating complex rendering pipelines:
+
+*Basic resources:*
+	- t:image.png          ; Texture from image file
+	- b:buffer.frag        ; Shader buffer from fragment shader
+	- bBackground:bg.frag  ; Named buffer resource
+
+*Nested buffers:*
+	"(t:tex1.jpg b:effect1.frag b:output.frag)"  ; Pipe texture through effect shader
+
+	Last resource will be the output resource for the nested buffer, resources before that will
+	be sequentially assigned as channels starting from 0 to 9, any more will cause an error.
+
+*Multi-input buffers:*
+	"(t:tex1.jpg b:effect1.frag (t:tex2.jpg b:effect2.frag) b:output.frag)"
+
+*Channel references:*
+	"wlsbg -0 tBackground:bg.png -1 (tBackground b:combine.frag b:effect.frag) '\*' image.frag"
+
+# UNIFORMS
+
+*Shaders support these uniforms:*
+	- _iResolution_            = vec3: (width, height, aspect ratio)
+	- _iTime_                  = float: elapsed time (seconds)
+	- _iTimeDelta_             = float: time since last frame
+	- _iFrame_                 = int: frame count
+	- _iFrameRate_             = float: estimated FPS
+	- _iMouse_                 = vec4: mouse state (see below)
+	- _iMousePos_              = vec2: real-time mouse position
+	- _iDate_                  = vec4: (year, month, day, seconds)
+	- _iChannel0..9_           = samplerXX: input channels
+	- _iChannelResolution[10]_ = vec3[10]: channel resolutions
+
+# MOUSE UNIFORMS
+
+	- _iMouse.xy_      = Last mouse down position
+	- _abs(iMouse.zw)_ = Mouse position during last button click
+	- _sign(iMouse.z)_ = Whether mouse button is down
+	- _sign(iMouse.w)_ = Whether mouse button is clicked
+	- _iMousePos.xy_   = Current mouse position
+
+# EXAMPLES
+
 See example shaders by visiting the Github at <https://github.com/Sublimeful/wlsbg/tree/master/examples>.
 
 # AUTHORS
