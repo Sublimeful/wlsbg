@@ -1,5 +1,10 @@
 #include "shader_channel.h"
-
+#include "shader.h"
+#include "shader_buffer.h"
+#include "shader_texture.h"
+#include "shader_uniform.h"
+#include <GL/gl.h>
+#include <GLES3/gl3.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,15 +40,15 @@ static shader_channel *parse_token(const char *input, int *pos) {
 
     if (input[*pos] != ')') {
       fprintf(stderr, "Invalid shader buffer syntax or too many channels for "
-                      "shader buffer (>4).");
+                      "shader buffer (>4).\n");
       exit(EXIT_FAILURE);
     }
     (*pos)++;
 
     // Only keep the last token as main channel
     shader_channel *last_token = token[count - 1];
-    if (last_token->type != BUFFER) {
-      fprintf(stderr, "Last argument must be a buffer to assign channels.");
+    if (count > 1 && last_token->type != BUFFER) {
+      fprintf(stderr, "Last argument must be a buffer to assign channels.\n");
       exit(EXIT_FAILURE);
     }
 
@@ -98,7 +103,7 @@ shader_channel *parse_channel_input(const char *input) {
 
   while ((current_token = parse_token(input, &pos))) {
     if (count > 4) {
-      fprintf(stderr, "Too many channels for shader buffer (>4).");
+      fprintf(stderr, "Too many channels for shader buffer (>4).\n");
       exit(EXIT_FAILURE);
     }
     channel[count++] = current_token;
@@ -106,8 +111,8 @@ shader_channel *parse_channel_input(const char *input) {
 
   // Only keep the last token as main channel
   last_token = channel[count - 1];
-  if (last_token->type != BUFFER) {
-    fprintf(stderr, "Last argument must be a buffer to assign channels.");
+  if (count > 1 && last_token->type != BUFFER) {
+    fprintf(stderr, "Last argument must be a buffer to assign channels.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -124,18 +129,49 @@ void free_shader_channel(shader_channel *channel) {
   if (!channel)
     return;
 
-  if (channel->type == TEXTURE) {
+  switch (channel->type) {
+  case TEXTURE:
+    glDeleteTextures(1, &channel->tex->tex_id);
     free(channel->tex->path);
     free(channel->tex);
-  } else if (channel->type == BUFFER) {
-    for (int i = 0; i < 4; i++) {
-      if (channel->buf->channel[i]) {
-        free_shader_channel(channel->buf->channel[i]);
-      }
-    }
-    free(channel->buf->shader_path);
-    free(channel->buf);
+    break;
+  case BUFFER:
+    free_shader_buffer(channel->buf);
+    break;
+  default:
+    break;
   }
 
   free(channel);
+}
+
+// Get texture ID from any channel type
+GLuint get_channel_texture(shader_channel *channel) {
+  if (channel->type == TEXTURE) {
+    return channel->tex->tex_id;
+  } else if (channel->type == BUFFER) {
+    return channel->buf->textures[channel->buf->current_texture];
+  }
+  return 0;
+}
+
+void init_channel_recursive(shader_channel *channel, int width, int height) {
+  if (!channel)
+    return;
+
+  switch (channel->type) {
+  case TEXTURE:
+    if (!load_shader_texture(channel->tex)) {
+      free_shader_channel(channel);
+    }
+    break;
+  case BUFFER:
+    if (!init_shader_buffer(channel->buf, width, height)) {
+      free_shader_channel(channel);
+      break;
+    }
+    break;
+  default:
+    break;
+  }
 }

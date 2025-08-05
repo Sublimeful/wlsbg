@@ -1,4 +1,6 @@
+#include "shader_buffer.h"
 #include "shader_channel.h"
+#include "shader_texture.h"
 
 #include <assert.h>
 #include <stdbool.h>

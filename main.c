@@ -1,4 +1,5 @@
 #include "shader.h"
+#include "shader_uniform.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include <errno.h>
 #include <getopt.h>
@@ -149,7 +150,7 @@ static void layer_surface_configure(void *data,
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
     // First draw
-    shader_render(output->shader_ctx, 0, NULL, NULL, 0, 0);
+    shader_render(output->shader_ctx, 0, NULL);
 
     // Setup frame callback (rendering happens later)
     output->frame_callback = wl_surface_frame(output->surface);
@@ -530,7 +531,7 @@ int main(int argc, char *argv[]) {
         // Mouse click should only be for 1 frame
         state.mouse.is_clicked = false;
 
-        shader_render(output->shader_ctx, elapsed, &mouse, NULL, 0, 0);
+        shader_render(output->shader_ctx, elapsed, &mouse);
 
         // Setup frame callback
         output->frame_callback = wl_surface_frame(output->surface);

@@ -1,13 +1,49 @@
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "shader.h"
+#include "shader_buffer.h"
+#include "shader_channel.h"
+#include "shader_uniform.h"
 #include "stb_image.h"
+#include "util.h"
+#include <EGL/egl.h>
+#include <GL/gl.h>
 #include <GLES3/gl3.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <wayland-egl.h>
+
+static const char *VERTEX_SHADER_SOURCE =
+    "#version 320 es\n"
+    "layout(location = 0) in vec2 position;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(position, 0.0, 1.0);\n"
+    "}\n";
+
+static const char *FRAGMENT_SHADER_TEMPLATE =
+    "#version 320 es\n"
+    "precision highp float;\n"
+    "uniform vec3 iResolution;\n"
+    "uniform float iTime;\n"
+    "uniform float iTimeDelta;\n"
+    "uniform int iFrame;\n"
+    "uniform float iFrameRate;\n"
+    "uniform vec4 iMouse;\n"
+    "uniform vec2 iMousePos;\n"
+    "uniform vec4 iDate;\n"
+    "uniform sampler2D iChannel0;\n"
+    "uniform sampler2D iChannel1;\n"
+    "uniform sampler2D iChannel2;\n"
+    "uniform sampler2D iChannel3;\n"
+    "uniform vec3 iChannelResolution[4];\n"
+    "out vec4 fragColor;\n"
+    "%s\n"
+    "void main() {\n"
+    "    mainImage(fragColor, gl_FragCoord.xy);\n"
+    "}\n";
 
 // Simple vertex data - single triangle covering entire screen
 static const float vertices[] = {
@@ -16,55 +52,7 @@ static const float vertices[] = {
     3.0f,  1.0f   // Top-right (extends beyond screen)
 };
 
-static const char *vertex_shader_source =
-    "#version 320 es\n"
-    "layout(location = 0) in vec2 position;\n"
-    "void main() {\n"
-    "    gl_Position = vec4(position, 0.0, 1.0);\n"
-    "}\n";
-
-// static shader_texture *load_shader_texture(const char *path) {
-//   int width;
-//   int height;
-//
-//   stbi_set_flip_vertically_on_load(true);
-//   unsigned char *data = stbi_load(path, &width, &height, NULL, STBI_rgb_alpha);
-//   if (!data) {
-//     fprintf(stderr,
-//             "Texture could not be loaded at %s, is there a file there?\n",
-//             path);
-//     return NULL;
-//   }
-//
-//   shader_texture *texture = malloc(sizeof(shader_texture));
-//   texture->data = data;
-//   texture->width = width;
-//   texture->height = height;
-//   return texture;
-// }
-
-static char *load_shader_file(const char *path) {
-  FILE *file = fopen(path, "rb");
-  if (!file)
-    return NULL;
-
-  fseek(file, 0, SEEK_END);
-  long length = ftell(file);
-  fseek(file, 0, SEEK_SET);
-
-  char *buffer = malloc(length + 1);
-  if (!buffer) {
-    fclose(file);
-    return NULL;
-  }
-
-  fread(buffer, 1, length, file);
-  buffer[length] = '\0';
-  fclose(file);
-  return buffer;
-}
-
-static GLuint compile_shader(GLenum type, const char *source) {
+GLuint compile_shader(GLenum type, const char *source) {
   GLuint shader = glCreateShader(type);
   glShaderSource(shader, 1, &source, NULL);
   glCompileShader(shader);
@@ -81,18 +69,59 @@ static GLuint compile_shader(GLenum type, const char *source) {
   return shader;
 }
 
+bool compile_and_link_program(GLuint *program, char *shader_path) {
+  char *fragment_shader_shard = load_file(shader_path);
+  if (!fragment_shader_shard)
+    return false;
+
+  // Create fragment shader
+  char *fragment_shader_source = malloc(strlen(fragment_shader_shard) + 1024);
+  sprintf(fragment_shader_source, FRAGMENT_SHADER_TEMPLATE,
+          fragment_shader_shard);
+
+  free(fragment_shader_shard);
+
+  GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
+  GLuint fragment_shader =
+      compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+
+  free(fragment_shader_source);
+
+  if (!vertex_shader || !fragment_shader) {
+    if (vertex_shader)
+      glDeleteShader(vertex_shader);
+    if (fragment_shader)
+      glDeleteShader(fragment_shader);
+    return false;
+  }
+
+  // Link program
+  *program = glCreateProgram();
+  glAttachShader(*program, vertex_shader);
+  glAttachShader(*program, fragment_shader);
+  glLinkProgram(*program);
+
+  glDeleteShader(vertex_shader);
+  glDeleteShader(fragment_shader);
+
+  GLint success;
+  glGetProgramiv(*program, GL_LINK_STATUS, &success);
+  if (!success) {
+    char info_log[512];
+    glGetProgramInfoLog(*program, 512, NULL, info_log);
+    fprintf(stderr, "Program linking failed: %s\n", info_log);
+    return false;
+  }
+
+  return true;
+}
+
 shader_context *shader_create(struct wl_display *display,
-                              struct wl_surface *surface,
-                              const char *shader_path, int width, int height,
-                              char *channel_input[4]) {
+                              struct wl_surface *surface, char *shader_path,
+                              int width, int height, char *channel_input[4]) {
   shader_context *ctx = calloc(1, sizeof(shader_context));
   if (!ctx)
     return NULL;
-
-  ctx->frame = 0;
-  ctx->last_time = 0.0;
-  ctx->width = width;
-  ctx->height = height;
 
   // Initialize EGL
   const char *extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
@@ -159,69 +188,6 @@ shader_context *shader_create(struct wl_display *display,
   // Disable vsync for manual timing control
   eglSwapInterval(ctx->egl_display, 0);
 
-  // Load and compile shaders
-  char *frag_source = load_shader_file(shader_path);
-  if (!frag_source)
-    goto error;
-
-  // Create fragment shader
-  char *full_frag_source = malloc(strlen(frag_source) + 1024);
-  sprintf(full_frag_source,
-          "#version 320 es\n"
-          "precision highp float;\n"
-          "uniform vec3 iResolution;\n"
-          "uniform float iTime;\n"
-          "uniform float iTimeDelta;\n"
-          "uniform int iFrame;\n"
-          "uniform float iFrameRate;\n"
-          "uniform vec4 iMouse;\n"
-          "uniform vec2 iMousePos;\n"
-          "uniform vec4 iDate;\n"
-          "uniform sampler2D iChannel0;\n"
-          "uniform sampler2D iChannel1;\n"
-          "uniform sampler2D iChannel2;\n"
-          "uniform sampler2D iChannel3;\n"
-          "uniform vec3 iChannelResolution[4];\n"
-          "out vec4 fragColor;\n"
-          "%s\n"
-          "void main() {\n"
-          "    mainImage(fragColor, gl_FragCoord.xy);\n"
-          "}\n",
-          frag_source);
-
-  free(frag_source);
-
-  GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-  GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, full_frag_source);
-
-  free(full_frag_source);
-
-  if (!vertex_shader || !fragment_shader) {
-    if (vertex_shader)
-      glDeleteShader(vertex_shader);
-    if (fragment_shader)
-      glDeleteShader(fragment_shader);
-    goto error;
-  }
-
-  // Link program
-  ctx->program = glCreateProgram();
-  glAttachShader(ctx->program, vertex_shader);
-  glAttachShader(ctx->program, fragment_shader);
-  glLinkProgram(ctx->program);
-
-  glDeleteShader(vertex_shader);
-  glDeleteShader(fragment_shader);
-
-  GLint success;
-  glGetProgramiv(ctx->program, GL_LINK_STATUS, &success);
-  if (!success) {
-    char info_log[512];
-    glGetProgramInfoLog(ctx->program, 512, NULL, info_log);
-    fprintf(stderr, "Program linking failed: %s\n", info_log);
-    goto error;
-  }
-
   // Create vertex buffer
   glGenVertexArrays(1, &ctx->vao);
   glGenBuffers(1, &ctx->vbo);
@@ -233,33 +199,17 @@ shader_context *shader_create(struct wl_display *display,
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
-  // Get uniform locations
-  ctx->u_resolution = glGetUniformLocation(ctx->program, "iResolution");
-  ctx->u_time = glGetUniformLocation(ctx->program, "iTime");
-  ctx->u_time_delta = glGetUniformLocation(ctx->program, "iTimeDelta");
-  ctx->u_frame = glGetUniformLocation(ctx->program, "iFrame");
-  ctx->u_frame_rate = glGetUniformLocation(ctx->program, "iFrameRate");
-  ctx->u_mouse = glGetUniformLocation(ctx->program, "iMouse");
-  ctx->u_mouse_pos = glGetUniformLocation(ctx->program, "iMousePos");
-  ctx->u_date = glGetUniformLocation(ctx->program, "iDate");
-
-  // Get uniform locations for iChannel0-3
+  // Allocate main buffer
+  ctx->buf = malloc(sizeof(shader_buffer));
+  ctx->buf->shader_path = shader_path;
   for (int i = 0; i < 4; i++) {
-    char name[16];
-    snprintf(name, sizeof(name), "iChannel%d", i);
-    ctx->u_channel[i] = glGetUniformLocation(ctx->program, name);
+    if (!channel_input[i])
+      continue;
+    ctx->buf->channel[i] = parse_channel_input(channel_input[i]);
   }
 
-  // Get channel resolution uniforms
-  for (int i = 0; i < 4; i++) {
-    char name[32];
-    snprintf(name, sizeof(name), "iChannelResolution[%d]", i);
-    ctx->u_channel_res[i] = glGetUniformLocation(ctx->program, name);
-  }
-
-  for (int i = 0; i < 4; i++) {
-    ctx->channel[i] = NULL;
-  }
+  // Initialize main buffer
+  init_shader_buffer(ctx->buf, width, height);
 
   ctx->initialized = true;
   return ctx;
@@ -269,59 +219,21 @@ error:
   return NULL;
 }
 
-void shader_render(shader_context *ctx, double current_time, iMouse *mouse,
-                   unsigned char *image_data, int image_width,
-                   int image_height) {
+void shader_render(shader_context *ctx, double current_time, iMouse *mouse) {
   if (!ctx || !ctx->initialized)
     return;
+
+  render_shader_buffer(ctx, ctx->buf, current_time, mouse);
 
   // Make context current
   eglMakeCurrent(ctx->egl_display, ctx->egl_surface, ctx->egl_surface,
                  ctx->egl_context);
 
-  // Set viewport
-  glViewport(0, 0, ctx->width, ctx->height);
-
-  // Use shader program
-  glUseProgram(ctx->program);
-
-  // Calculate delta time and fps
-  double delta = (ctx->frame == 0) ? 0 : (current_time - ctx->last_time);
-  float fps = (delta > 0) ? (1.0f / delta) : 0;
-
-  // Update state for next frame
-  ctx->last_time = current_time;
-  ctx->frame++;
-
-  if (ctx->u_resolution >= 0)
-    glUniform3f(ctx->u_resolution, (float)ctx->width, (float)ctx->height,
-                (float)ctx->width / ctx->height);
-  if (ctx->u_time >= 0)
-    glUniform1f(ctx->u_time, (float)current_time);
-  if (ctx->u_time_delta >= 0)
-    glUniform1f(ctx->u_time_delta, (float)delta);
-  if (mouse) {
-    if (ctx->u_mouse >= 0)
-      glUniform4f(ctx->u_mouse, mouse->x, mouse->y, mouse->z, mouse->w);
-    if (ctx->u_mouse_pos >= 0)
-      glUniform2f(ctx->u_mouse_pos, mouse->real_x, mouse->real_y);
-  }
-  if (ctx->u_frame >= 0)
-    glUniform1i(ctx->u_frame, ctx->frame);
-  if (ctx->u_frame_rate >= 0)
-    glUniform1f(ctx->u_frame_rate, fps);
-  if (ctx->u_date >= 0) {
-    // Get current date/time
-    time_t now = time(NULL);
-    struct tm *tm = localtime(&now);
-    float seconds = tm->tm_sec + tm->tm_min * 60 + tm->tm_hour * 3600;
-    glUniform4f(ctx->u_date, (float)(tm->tm_year + 1900), (float)tm->tm_mon,
-                (float)tm->tm_mday, seconds);
-  }
-
-  // Draw
-  glBindVertexArray(ctx->vao);
-  glDrawArrays(GL_TRIANGLES, 0, 3);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, ctx->buf->fbo);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+  glBlitFramebuffer(0, 0, ctx->buf->width, ctx->buf->height, 0, 0,
+                    ctx->buf->width, ctx->buf->height, GL_COLOR_BUFFER_BIT,
+                    GL_NEAREST);
 
   // Swap buffers
   eglSwapBuffers(ctx->egl_display, ctx->egl_surface);
@@ -331,8 +243,8 @@ void shader_resize(shader_context *ctx, int width, int height) {
   if (!ctx || !ctx->egl_window)
     return;
 
-  ctx->width = width;
-  ctx->height = height;
+  ctx->buf->width = width;
+  ctx->buf->height = height;
   wl_egl_window_resize(ctx->egl_window, width, height, 0, 0);
 }
 
@@ -344,13 +256,15 @@ void shader_destroy(shader_context *ctx) {
     eglMakeCurrent(ctx->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
                    EGL_NO_CONTEXT);
 
-    if (ctx->program)
-      glDeleteProgram(ctx->program);
-
     if (ctx->vao)
       glDeleteVertexArrays(1, &ctx->vao);
     if (ctx->vbo)
       glDeleteBuffers(1, &ctx->vbo);
+
+    for (int i = 0; i < 4; i++) {
+      free_shader_channel(ctx->buf->channel[i]);
+    }
+    free(ctx->buf);
 
     if (ctx->egl_surface)
       eglDestroySurface(ctx->egl_display, ctx->egl_surface);
