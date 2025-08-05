@@ -1,3 +1,4 @@
+#include "resource_registry.h"
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "shader.h"
@@ -199,14 +200,19 @@ shader_context *shader_create(struct wl_display *display,
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
+  // Create a registry
+  resource_registry *registry = NULL;
+
   // Allocate main buffer
   ctx->buf = malloc(sizeof(shader_buffer));
   ctx->buf->shader_path = shader_path;
   for (int i = 0; i < 4; i++) {
     if (!channel_input[i])
       continue;
-    ctx->buf->channel[i] = parse_channel_input(channel_input[i]);
+    ctx->buf->channel[i] = parse_channel_input(channel_input[i], &registry);
   }
+
+  free(registry);
 
   // Initialize main buffer
   init_shader_buffer(ctx->buf, width, height);

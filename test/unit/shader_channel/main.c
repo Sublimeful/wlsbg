@@ -4,12 +4,16 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 void parse_channel_input_1() {
   char *input = "t:image1.png (t:image2.png t:image3.png b:shader1.frag) "
                 "b:shader2.frag";
-  shader_channel *channel = parse_channel_input(input);
+  // Create a registry
+  resource_registry *registry = NULL;
+  shader_channel *channel = parse_channel_input(input, &registry);
+  free(registry);
 
   assert(channel->type == BUFFER);
   assert(strcmp(channel->buf->shader_path, "shader2.frag") == 0);
@@ -32,7 +36,10 @@ void parse_channel_input_1() {
 
 void parse_channel_input_2() {
   char *input = "t:image1.png b:shader1.frag b:shader2.frag";
-  shader_channel *channel = parse_channel_input(input);
+  // Create a registry
+  resource_registry *registry = NULL;
+  shader_channel *channel = parse_channel_input(input, &registry);
+  free(registry);
 
   assert(channel->type == BUFFER);
   assert(strcmp(channel->buf->shader_path, "shader2.frag") == 0);

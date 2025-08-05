@@ -25,6 +25,7 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height) {
   buf->height = height;
   buf->frame = 0;
   buf->last_time = 0;
+  buf->render_parity = 0;
 
   if (!compile_and_link_program(&buf->program, buf->shader_path)) {
     return false;
@@ -35,8 +36,8 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height) {
   glGenTextures(2, buf->textures);
   for (int i = 0; i < 2; i++) {
     glBindTexture(GL_TEXTURE_2D, buf->textures[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA,
+                 GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   }
@@ -54,7 +55,9 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height) {
 
   // Initialize buffer channels
   for (int i = 0; i < 4; i++) {
-    init_channel_recursive(buf->channel[i], width, height);
+    if (buf->channel[i]) {
+      init_channel_recursive(buf->channel[i], width, height);
+    }
   }
 
   return true;
@@ -62,9 +65,13 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height) {
 
 void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
                           double current_time, iMouse *mouse) {
+  // Change parity
+  buf->render_parity = !buf->render_parity;
+
   // Recursively render inputs first
   for (int i = 0; i < 4; i++) {
-    if (buf->channel[i] && buf->channel[i]->type == BUFFER) {
+    if (buf->channel[i] && buf->channel[i]->type == BUFFER &&
+        buf->channel[i]->buf->render_parity != buf->render_parity) {
       render_shader_buffer(ctx, buf->channel[i]->buf, current_time, mouse);
     }
   }

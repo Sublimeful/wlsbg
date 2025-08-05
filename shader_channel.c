@@ -1,4 +1,5 @@
 #include "shader_channel.h"
+#include "resource_registry.h"
 #include "shader.h"
 #include "shader_buffer.h"
 #include "shader_texture.h"
@@ -18,7 +19,8 @@ static void skip_whitespace(const char *input, int *pos) {
 }
 
 // Function to parse a token
-static shader_channel *parse_token(const char *input, int *pos) {
+shader_channel *parse_token(const char *input, int *pos,
+                            resource_registry **registry) {
   skip_whitespace(input, pos);
   if (!input[*pos])
     return NULL;
@@ -32,7 +34,7 @@ static shader_channel *parse_token(const char *input, int *pos) {
     while (input[*pos] && input[*pos] != ')') {
       if (count >= 5)
         break;
-      shader_channel *current_token = parse_token(input, pos);
+      shader_channel *current_token = parse_token(input, pos, registry);
       if (!current_token)
         break;
       token[count++] = current_token;
@@ -60,65 +62,103 @@ static shader_channel *parse_token(const char *input, int *pos) {
     return last_token;
   }
 
-  // Parse type prefix
+  // Parse type prefix (t or b)
   char type_char = input[*pos];
   if (type_char != 't' && type_char != 'b')
     return NULL;
   (*pos)++;
 
-  if (input[*pos] != ':')
-    return NULL;
-  (*pos)++;
+  // Set type
+  shader_channel_type type = NONE;
+  switch (type_char) {
+  case 't':
+    type = TEXTURE;
+    break;
+  case 'b':
+    type = BUFFER;
+    break;
+  default:
+    break;
+  }
 
-  shader_channel *channel = malloc(sizeof(shader_channel));
-
-  // Parse path
-  int start = *pos;
-  while (input[*pos] && !isspace(input[*pos]) && input[*pos] != ')') {
+  // Parse name (or empty for anonymous)
+  int name_start = *pos;
+  while (input[*pos] && !isspace(input[*pos]) && input[*pos] != ':' &&
+         input[*pos] != ')') {
     (*pos)++;
   }
-  int len = *pos - start;
-  char *path = malloc(len + 1);
-  strncpy(path, input + start, len);
-  path[len] = '\0';
+  int name_len = *pos - name_start;
+  char *name =
+      name_len > 0 ? strndup(input + name_start, name_len) : strdup("");
 
-  if (type_char == 't') {
-    channel->tex = malloc(sizeof(shader_texture));
-    channel->type = TEXTURE;
-    channel->tex->path = path;
+  // Handle definition (with colon) or reference (without colon)
+  shader_channel *channel = NULL;
+  if (input[*pos] == ':') {
+    (*pos)++; // Skip colon
+    // Parse path
+    int path_start = *pos;
+    while (input[*pos] && !isspace(input[*pos]) && input[*pos] != ')') {
+      (*pos)++;
+    }
+    int path_len = *pos - path_start;
+    char *path = strndup(input + path_start, path_len);
+
+    // Create resource
+    channel = malloc(sizeof(shader_channel));
+    channel->initialized = false;
+    channel->type = type;
+
+    switch (type) {
+    case TEXTURE:
+      channel->tex = malloc(sizeof(shader_texture));
+      channel->tex->path = path;
+      break;
+    case BUFFER:
+      channel->buf = malloc(sizeof(shader_buffer));
+      channel->buf->shader_path = path;
+      break;
+    default:
+      break;
+    }
+
+    // Register if named
+    if (name_len > 0) {
+      registry_add(registry, name, type, channel);
+    }
   } else {
-    channel->buf = malloc(sizeof(shader_buffer));
-    channel->type = BUFFER;
-    channel->buf->shader_path = path;
+    // Reference existing resource
+    if (name_len == 0) {
+      fprintf(stderr, "Error: Reference must include a name\n");
+      exit(EXIT_FAILURE);
+    }
+    channel = registry_lookup(*registry, name, type);
+    if (!channel) {
+      fprintf(stderr, "Error: Resource '%s' not found\n", name);
+      exit(EXIT_FAILURE);
+    }
   }
-
+  free(name);
   return channel;
 }
 
 // Main parser function
-shader_channel *parse_channel_input(const char *input) {
+shader_channel *parse_channel_input(const char *input,
+                                    resource_registry **registry_pointer) {
   int pos = 0, count = 0;
-  shader_channel *channel[5];
-  shader_channel *current_token, *last_token;
+  shader_channel *channel[5] = {0};
 
-  while ((current_token = parse_token(input, &pos))) {
-    if (count > 4) {
-      fprintf(stderr, "Too many channels for shader buffer (>4).\n");
-      exit(EXIT_FAILURE);
-    }
-    channel[count++] = current_token;
+  while (count < 5) {
+    shader_channel *token = parse_token(input, &pos, registry_pointer);
+    if (!token)
+      break;
+    channel[count++] = token;
   }
 
-  // Only keep the last token as main channel
-  last_token = channel[count - 1];
-  if (count > 1 && last_token->type != BUFFER) {
-    fprintf(stderr, "Last argument must be a buffer to assign channels.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // Copy channels to buffer
+  shader_channel *last_token = channel[count - 1];
   for (int i = 0; i < count - 1; i++) {
-    last_token->buf->channel[i] = channel[i];
+    if (last_token->type == BUFFER) {
+      last_token->buf->channel[i] = channel[i];
+    }
   }
 
   return last_token;
@@ -156,8 +196,9 @@ GLuint get_channel_texture(shader_channel *channel) {
 }
 
 void init_channel_recursive(shader_channel *channel, int width, int height) {
-  if (!channel)
+  if (!channel || channel->initialized)
     return;
+  channel->initialized = true;
 
   switch (channel->type) {
   case TEXTURE:

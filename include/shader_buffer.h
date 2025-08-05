@@ -20,6 +20,7 @@ struct _shader_buffer {
   int current_texture; // 0 or 1
   shader_channel *channel[4];
   shader_uniform *u;
+  bool render_parity;
 };
 
 typedef struct _shader_buffer shader_buffer;
