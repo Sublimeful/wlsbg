@@ -56,6 +56,9 @@ static const float vertices[] = {
 
 GLuint compile_shader(GLenum type, const char *source) {
   GLuint shader = glCreateShader(type);
+  if (!shader)
+    return 0;
+
   glShaderSource(shader, 1, &source, NULL);
   glCompileShader(shader);
 
@@ -77,18 +80,23 @@ bool compile_and_link_program(GLuint *program, char *shader_path,
   if (!fragment_shader_shard)
     return false;
 
-  char *shared_fragment_file = load_file(shared_shader_path);
-  char *shared_fragment_shard;
-  if (shared_fragment_file)
-    shared_fragment_shard = shared_fragment_file;
-  else
-    shared_fragment_shard = "";
+  char *shared_fragment_file =
+      shared_shader_path ? load_file(shared_shader_path) : NULL;
+  char *shared_fragment_shard =
+      shared_fragment_file ? shared_fragment_file : "";
 
   // Create fragment shader
-  char *fragment_shader_source = malloc(strlen(shared_fragment_shard) +
-                                        strlen(fragment_shader_shard) + 1024);
-  sprintf(fragment_shader_source, FRAGMENT_SHADER_TEMPLATE,
-          shared_fragment_shard, fragment_shader_shard);
+  size_t buf_size =
+      strlen(shared_fragment_shard) + strlen(fragment_shader_shard) + 1024;
+  char *fragment_shader_source = malloc(buf_size);
+  if (!fragment_shader_source) {
+    free(fragment_shader_shard);
+    free(shared_fragment_file);
+    return false;
+  }
+
+  snprintf(fragment_shader_source, buf_size, FRAGMENT_SHADER_TEMPLATE,
+           shared_fragment_shard, fragment_shader_shard);
 
   free(fragment_shader_shard);
   free(shared_fragment_file);
@@ -109,6 +117,12 @@ bool compile_and_link_program(GLuint *program, char *shader_path,
 
   // Link program
   *program = glCreateProgram();
+  if (!*program) {
+    glDeleteShader(vertex_shader);
+    glDeleteShader(fragment_shader);
+    return false;
+  }
+
   glAttachShader(*program, vertex_shader);
   glAttachShader(*program, fragment_shader);
   glLinkProgram(*program);
@@ -122,6 +136,8 @@ bool compile_and_link_program(GLuint *program, char *shader_path,
     char info_log[512];
     glGetProgramInfoLog(*program, 512, NULL, info_log);
     fprintf(stderr, "Program linking failed: %s\n", info_log);
+    glDeleteProgram(*program);
+    *program = 0;
     return false;
   }
 
@@ -138,7 +154,7 @@ shader_context *shader_create(struct wl_display *display,
 
   // Initialize EGL
   const char *extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-  if (!strstr(extensions, "EGL_KHR_platform_wayland")) {
+  if (!extensions || !strstr(extensions, "EGL_KHR_platform_wayland")) {
     fprintf(stderr, "EGL Wayland platform not supported\n");
     goto error;
   }
@@ -167,11 +183,13 @@ shader_context *shader_create(struct wl_display *display,
                              EGL_NONE};
 
   EGLint num_configs;
-  if (!eglChooseConfig(ctx->egl_display, config_attribs, &ctx->egl_config, 1,
+  EGLConfig config;
+  if (!eglChooseConfig(ctx->egl_display, config_attribs, &config, 1,
                        &num_configs) ||
       num_configs == 0) {
     goto error;
   }
+  ctx->egl_config = config;
 
   // Create context
   EGLint context_attribs[] = {EGL_CONTEXT_MAJOR_VERSION, 3,
@@ -217,17 +235,29 @@ shader_context *shader_create(struct wl_display *display,
 
   // Allocate main buffer
   ctx->buf = malloc(sizeof(shader_buffer));
+  if (!ctx->buf)
+    goto error;
+  memset(ctx->buf, 0, sizeof(shader_buffer));
+
   for (int i = 0; i < 4; i++) {
     if (!channel_input[i])
       continue;
     ctx->buf->channel[i] = parse_channel_input(channel_input[i], &registry);
   }
 
-  free(registry);
+  registry_free(registry);
 
   // Initialize main buffer
-  ctx->buf->shader_path = shader_path;
-  init_shader_buffer(ctx->buf, width, height, shared_shader_path);
+  ctx->shared_shader_path =
+      shared_shader_path ? strdup(shared_shader_path) : NULL;
+  ctx->buf->shader_path = shader_path ? strdup(shader_path) : NULL;
+  if (!ctx->buf->shader_path) {
+    goto error;
+  }
+
+  if (!init_shader_buffer(ctx->buf, width, height, ctx->shared_shader_path)) {
+    goto error;
+  }
 
   ctx->initialized = true;
   return ctx;
@@ -279,10 +309,10 @@ void shader_destroy(shader_context *ctx) {
     if (ctx->vbo)
       glDeleteBuffers(1, &ctx->vbo);
 
-    for (int i = 0; i < 4; i++) {
-      free_shader_channel(ctx->buf->channel[i]);
+    if (ctx->buf) {
+      free_shader_buffer(ctx->buf);
+      ctx->buf = NULL;
     }
-    free(ctx->buf);
 
     if (ctx->egl_surface)
       eglDestroySurface(ctx->egl_display, ctx->egl_surface);
@@ -294,5 +324,6 @@ void shader_destroy(shader_context *ctx) {
     eglTerminate(ctx->egl_display);
   }
 
+  free(ctx->shared_shader_path);
   free(ctx);
 }

@@ -26,7 +26,7 @@ shader_channel *parse_channel_input(const char *input,
                                     resource_registry **registry_pointer);
 void free_shader_channel(shader_channel *channel);
 GLuint get_channel_texture(shader_channel *channel);
-void init_channel_recursive(shader_channel *channel, int width, int height,
+bool init_channel_recursive(shader_channel *channel, int width, int height,
                             char *shared_shader_path);
 
 #endif

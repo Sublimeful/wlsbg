@@ -4,17 +4,24 @@
 #include "shader_uniform.h"
 #include <GLES3/gl3.h>
 #include <stdlib.h>
+#include <string.h>
 
 void free_shader_buffer(shader_buffer *buf) {
+  if (!buf)
+    return;
+
   for (int i = 0; i < 4; i++) {
     if (buf->channel[i]) {
       free_shader_channel(buf->channel[i]);
+      buf->channel[i] = NULL;
     }
   }
   if (buf->program)
     glDeleteProgram(buf->program);
-  glDeleteTextures(2, buf->textures);
-  glDeleteFramebuffers(1, &buf->fbo);
+  if (buf->fbo)
+    glDeleteFramebuffers(1, &buf->fbo);
+  if (buf->textures[0] || buf->textures[1])
+    glDeleteTextures(2, buf->textures);
   free(buf->u);
   free(buf->shader_path);
   free(buf);
@@ -22,6 +29,9 @@ void free_shader_buffer(shader_buffer *buf) {
 
 bool init_shader_buffer(shader_buffer *buf, int width, int height,
                         char *shared_shader_path) {
+  if (!buf)
+    return false;
+
   buf->width = width;
   buf->height = height;
   buf->frame = 0;
@@ -53,13 +63,19 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
 
   // Initialize buffer uniforms
   buf->u = malloc(sizeof(shader_uniform));
+  if (!buf->u) {
+    return false;
+  }
+  memset(buf->u, 0, sizeof(shader_uniform));
   set_uniform_locations(buf->program, buf->u);
 
   // Initialize buffer channels
   for (int i = 0; i < 4; i++) {
-    if (buf->channel[i]) {
-      init_channel_recursive(buf->channel[i], width, height,
-                             shared_shader_path);
+    if (!buf->channel[i])
+      continue;
+    if (!init_channel_recursive(buf->channel[i], width, height,
+                                shared_shader_path)) {
+      buf->channel[i] = NULL;
     }
   }
 
@@ -68,6 +84,9 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
 
 void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
                           double current_time, iMouse *mouse) {
+  if (!ctx || !buf)
+    return;
+
   // Change parity
   buf->render_parity = !buf->render_parity;
 
@@ -96,9 +115,11 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   for (int i = 0; i < 4; i++) {
     if (buf->channel[i]) {
       GLuint tex_id = get_channel_texture(buf->channel[i]);
-      glActiveTexture(GL_TEXTURE0 + i);
-      glBindTexture(GL_TEXTURE_2D, tex_id);
-      glUniform1i(buf->u->channel[i], i);
+      if (tex_id) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, tex_id);
+        glUniform1i(buf->u->channel[i], i);
+      }
     }
   }
 

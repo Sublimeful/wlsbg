@@ -195,25 +195,27 @@ GLuint get_channel_texture(shader_channel *channel) {
   return 0;
 }
 
-void init_channel_recursive(shader_channel *channel, int width, int height,
+bool init_channel_recursive(shader_channel *channel, int width, int height,
                             char *shared_shader_path) {
   if (!channel || channel->initialized)
-    return;
+    return false;
   channel->initialized = true;
 
   switch (channel->type) {
   case TEXTURE:
     if (!load_shader_texture(channel->tex)) {
       free_shader_channel(channel);
+      return false;
     }
     break;
   case BUFFER:
     if (!init_shader_buffer(channel->buf, width, height, shared_shader_path)) {
       free_shader_channel(channel);
-      break;
+      return false;
     }
     break;
   default:
     break;
   }
+  return true;
 }

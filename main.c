@@ -89,6 +89,9 @@ struct output {
 };
 
 static void destroy_output(struct output *output) {
+  if (!output)
+    return;
+
   if (output->shader_ctx)
     shader_destroy(output->shader_ctx);
   if (output->frame_callback)
@@ -98,7 +101,8 @@ static void destroy_output(struct output *output) {
   if (output->layer_surface)
     zwlr_layer_surface_v1_destroy(output->layer_surface);
   wl_list_remove(&output->link);
-  wl_output_destroy(output->wl_output);
+  if (output->wl_output)
+    wl_output_destroy(output->wl_output);
   free(output->name);
   free(output);
 }
@@ -108,7 +112,7 @@ static void destroy_output(struct output *output) {
 static void frame_done(void *data, struct wl_callback *wl_callback,
                        uint32_t callback_data) {
   struct output *output = data;
-  if (output->frame_callback != wl_callback) {
+  if (!output || output->frame_callback != wl_callback) {
     fprintf(stderr, "Frame callback tracking error\n");
     exit(EXIT_FAILURE);
   }
@@ -132,6 +136,8 @@ static void layer_surface_configure(void *data,
                                     uint32_t serial, uint32_t width,
                                     uint32_t height) {
   struct output *output = data;
+  if (!output)
+    return;
   struct state *state = output->state;
 
   if (width > 0)
@@ -172,7 +178,8 @@ static void layer_surface_configure(void *data,
 static void layer_surface_closed(void *data,
                                  struct zwlr_layer_surface_v1 *surface) {
   struct output *output = data;
-  destroy_output(output);
+  if (output)
+    destroy_output(output);
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
@@ -196,18 +203,31 @@ static void output_mode(void *data, struct wl_output *wl_output, uint32_t flags,
 
 static void output_done(void *data, struct wl_output *wl_output) {
   struct output *output = data;
+  if (!output)
+    return;
   if (output->surface) {
     /* output has already been given a surface */
     return;
   }
 
   struct state *state = output->state;
-  bool wildcard = !strcmp(state->output_name, "*");
-  if (wildcard || (output->name && !strcmp(output->name, state->output_name))) {
+  bool wildcard = state->output_name && !strcmp(state->output_name, "*");
+  if (wildcard || (output->name && state->output_name &&
+                   !strcmp(output->name, state->output_name))) {
     output->surface = wl_compositor_create_surface(state->compositor);
+    if (!output->surface) {
+      fprintf(stderr, "Failed to create surface\n");
+      return;
+    }
     output->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         state->layer_shell, output->surface, output->wl_output, state->layer,
         "wlsbg");
+    if (!output->layer_surface) {
+      fprintf(stderr, "Failed to create layer surface\n");
+      wl_surface_destroy(output->surface);
+      output->surface = NULL;
+      return;
+    }
 
     zwlr_layer_surface_v1_set_size(output->layer_surface, 0, 0);
     zwlr_layer_surface_v1_set_anchor(output->layer_surface,
@@ -230,8 +250,10 @@ static void output_scale(void *data, struct wl_output *wl_output,
 static void output_name(void *data, struct wl_output *wl_output,
                         const char *name) {
   struct output *output = data;
+  if (!output)
+    return;
   free(output->name);
-  output->name = strdup(name);
+  output->name = name ? strdup(name) : NULL;
 }
 
 static void output_description(void *data, struct wl_output *wl_output,
@@ -254,6 +276,8 @@ static const struct wl_output_listener output_listener = {
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
                                   uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
   struct state *s = data;
+  if (!s)
+    return;
   s->mouse.x = wl_fixed_to_double(sx);
   s->mouse.y = wl_fixed_to_double(sy);
 
@@ -277,6 +301,8 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
                                   uint32_t serial, uint32_t time,
                                   uint32_t button, uint32_t state) {
   struct state *s = data;
+  if (!s)
+    return;
 
   if (button == BTN_LEFT) {
     s->mouse.is_down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
@@ -305,9 +331,13 @@ static const struct wl_pointer_listener pointer_listener = {
 static void seat_handle_capabilities(void *data, struct wl_seat *seat,
                                      enum wl_seat_capability caps) {
   struct state *state = data;
+  if (!state)
+    return;
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !state->pointer) {
     state->pointer = wl_seat_get_pointer(seat);
-    wl_pointer_add_listener(state->pointer, &pointer_listener, state);
+    if (state->pointer) {
+      wl_pointer_add_listener(state->pointer, &pointer_listener, state);
+    }
   }
 }
 
@@ -325,6 +355,8 @@ static void registry_global(void *data, struct wl_registry *registry,
                             uint32_t name, const char *interface,
                             uint32_t version) {
   struct state *state = data;
+  if (!state)
+    return;
 
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     state->compositor =
@@ -335,21 +367,31 @@ static void registry_global(void *data, struct wl_registry *registry,
   } else if (strcmp(interface, wl_output_interface.name) == 0 && version >= 4) {
     // Only accept version >= 4 outputs, as those provide their name/description
     struct output *output = calloc(1, sizeof(struct output));
+    if (!output)
+      return;
     output->state = state;
     output->wl_name = name;
     output->wl_output =
         wl_registry_bind(registry, name, &wl_output_interface, 4);
+    if (!output->wl_output) {
+      free(output);
+      return;
+    }
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
   } else if (strcmp(interface, wl_seat_interface.name) == 0) {
     state->seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
-    wl_seat_add_listener(state->seat, &seat_listener, state);
+    if (state->seat) {
+      wl_seat_add_listener(state->seat, &seat_listener, state);
+    }
   }
 }
 
 static void registry_global_remove(void *data, struct wl_registry *registry,
                                    uint32_t name) {
   struct state *state = data;
+  if (!state)
+    return;
   struct output *output, *tmp;
   wl_list_for_each_safe(output, tmp, &state->outputs, link) {
     if (output->wl_name == name) {
@@ -436,17 +478,28 @@ int main(int argc, char *argv[]) {
   }
 
   state.registry = wl_display_get_registry(state.display);
+  if (!state.registry) {
+    fprintf(stderr, "Failed to get registry\n");
+    wl_display_disconnect(state.display);
+    return EXIT_FAILURE;
+  }
   wl_registry_add_listener(state.registry, &registry_listener, &state);
 
   for (int i = 0; i < 3; ++i) {
     if (wl_display_roundtrip(state.display) < 0) {
       fprintf(stderr, "wl_display_roundtrip failed");
+      wl_registry_destroy(state.registry);
+      wl_display_disconnect(state.display);
       return 1;
     }
   }
 
   if (!state.compositor || !state.layer_shell) {
     fprintf(stderr, "Missing required Wayland interfaces\n");
+    if (state.registry)
+      wl_registry_destroy(state.registry);
+    if (state.display)
+      wl_display_disconnect(state.display);
     return EXIT_FAILURE;
   }
 
@@ -506,8 +559,8 @@ int main(int argc, char *argv[]) {
       double elapsed = timespec_to_sec(now) - timespec_to_sec(state.start_time);
 
       // Render all outputs
-      struct output *output;
-      wl_list_for_each(output, &state.outputs, link) {
+      struct output *output, *tmp;
+      wl_list_for_each_safe(output, tmp, &state.outputs, link) {
         if (!output->shader_ctx || output->frame_callback)
           continue;
 
