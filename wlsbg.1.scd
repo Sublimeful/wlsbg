@@ -97,9 +97,9 @@ Channels can also accept special pre-named resources.
 *tKeyboard*
 	This resource is a 256x3 pixel texture encoding the current state of the keyboard.
 	The states are represented as such:
-		- First 256  = Key down [0 or 1]
-		- Second 256 = Key just pressed [0 or 1]
-		- Third 256  = Key toggled [0 or 1]
+		- First 256  = Key down [0 or 255]
+		- Second 256 = Key just pressed [0 or 255]
+		- Third 256  = Key toggled [0 or 255]
 
 Look in the examples directory for more information on how to use these special resources.
 

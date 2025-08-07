@@ -1,7 +1,7 @@
 project(
   'wlsbg',
   'c',
-  version: '3.1.5',
+  version: '3.1.6',
   license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
@@ -27,7 +27,7 @@ if is_freebsd
   add_project_arguments('-D_C11_SOURCE', language: 'c')
 endif
 
-math = cc.find_library('m', required: true)
+math = cc.find_library('m')
 wayland_egl = dependency('wayland-egl')
 wayland_protos = dependency('wayland-protocols', version: '>=1.31')
 wayland_scanner = dependency('wayland-scanner', version: '>=1.14.91', native: true)
