@@ -49,6 +49,26 @@ Displays a shader on specified outputs of your Wayland session with support for 
 *[SHADER PATH]*
 	Path to the main fragment shader that will be displayed to the output.
 
+# UNIFORMS
+
+*Shaders support these uniforms:*
+	- _iResolution_            = vec3: (width, height, aspect ratio)
+	- _iTime_                  = float: elapsed time (seconds)
+	- _iTimeDelta_             = float: time since last frame
+	- _iFrame_                 = int: frame count
+	- _iFrameRate_             = float: estimated FPS
+	- _iMouse_                 = vec4: mouse state (see below)
+	- _iMousePos_              = vec2: real-time mouse position
+	- _iDate_                  = vec4: (year, month, day, seconds)
+	- _iChannel0..9_           = samplerXX: input channels
+	- _iChannelResolution[10]_ = vec3[10]: channel resolutions
+
+*About iMouse:*
+	- _iMouse.xy_              = Last mouse down position
+	- _abs(iMouse.zw)_         = Mouse position during last button click
+	- _sign(iMouse.z)_         = Whether mouse button is down
+	- _sign(iMouse.w)_         = Whether mouse button is clicked
+
 # SHADER BUFFER SYNTAX
 
 Channels support a powerful syntax for creating complex rendering pipelines:
@@ -70,25 +90,18 @@ Channels support a powerful syntax for creating complex rendering pipelines:
 *Channel references:*
 	"wlsbg -0 tBackground:bg.png -1 (tBackground b:combine.frag b:effect.frag) '\*' image.frag"
 
-# UNIFORMS
+# SPECIAL CHANNEL INPUTS
 
-*Shaders support these uniforms:*
-	- _iResolution_            = vec3: (width, height, aspect ratio)
-	- _iTime_                  = float: elapsed time (seconds)
-	- _iTimeDelta_             = float: time since last frame
-	- _iFrame_                 = int: frame count
-	- _iFrameRate_             = float: estimated FPS
-	- _iMouse_                 = vec4: mouse state (see below)
-	- _iMousePos_              = vec2: real-time mouse position
-	- _iDate_                  = vec4: (year, month, day, seconds)
-	- _iChannel0..9_           = samplerXX: input channels
-	- _iChannelResolution[10]_ = vec3[10]: channel resolutions
+Channels can also accept special pre-named resources.
 
-*About iMouse:*
-	- _iMouse.xy_              = Last mouse down position
-	- _abs(iMouse.zw)_         = Mouse position during last button click
-	- _sign(iMouse.z)_         = Whether mouse button is down
-	- _sign(iMouse.w)_         = Whether mouse button is clicked
+*tKeyboard*
+	This resource is a 256x3 pixel texture encoding the current state of the keyboard.
+	The states are represented as such:
+		- First 256  = Key down [0 or 1]
+		- Second 256 = Key just pressed [0 or 1]
+		- Third 256  = Key toggled [0 or 1]
+
+Look in the examples directory for more information on how to use these special resources.
 
 # EXAMPLES
 

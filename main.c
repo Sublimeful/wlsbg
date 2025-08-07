@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 // clang-format off
 #define USAGE_STRING                                                            \
@@ -66,6 +67,7 @@ struct state {
   struct wp_viewporter *viewporter;
   struct wl_seat *seat;
   struct wl_pointer *pointer;
+  struct wl_keyboard *wl_keyboard;
   struct wl_list outputs;
 
   char *output_name;
@@ -269,6 +271,9 @@ static void output_done(void *data, struct wl_output *wl_output) {
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
     zwlr_layer_surface_v1_set_exclusive_zone(output->layer_surface, -1);
+    zwlr_layer_surface_v1_set_keyboard_interactivity(
+        output->layer_surface,
+        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
     zwlr_layer_surface_v1_add_listener(output->layer_surface,
                                        &layer_surface_listener, output);
     wl_surface_commit(output->surface);
@@ -361,6 +366,66 @@ static const struct wl_pointer_listener pointer_listener = {
 };
 // }}>
 
+// <{{ Keyboard listener
+
+static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
+                                   uint32_t format, int32_t fd, uint32_t size) {
+  // We don't need the keymap, just close the fd
+  close(fd);
+}
+
+static void keyboard_handle_enter(void *data, struct wl_keyboard *keyboard,
+                                  uint32_t serial, struct wl_surface *surface,
+                                  struct wl_array *keys) {
+  // Handle keyboard focus enter - could be used for state reset if needed
+}
+
+static void keyboard_handle_leave(void *data, struct wl_keyboard *keyboard,
+                                  uint32_t serial, struct wl_surface *surface) {
+  // Handle keyboard focus leave - could reset key states here
+}
+
+static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
+                                uint32_t serial, uint32_t time, uint32_t key,
+                                uint32_t key_state) {
+  struct state *state = data;
+  if (!state)
+    return;
+
+  struct output *output, *tmp;
+  wl_list_for_each_safe(output, tmp, &state->outputs, link) {
+    // Update key state (key is the scancode)
+    bool is_pressed = (key_state == WL_KEYBOARD_KEY_STATE_PRESSED);
+    if (key < 256) {
+      output->shader_ctx->keyboard.key[key] = is_pressed;
+    }
+  }
+}
+
+static void keyboard_handle_modifiers(void *data, struct wl_keyboard *keyboard,
+                                      uint32_t serial, uint32_t mods_depressed,
+                                      uint32_t mods_latched,
+                                      uint32_t mods_locked, uint32_t group) {
+  // Handle key modifiers - maybe in the future if necessary? Probably not.
+}
+
+static void keyboard_handle_repeat_info(void *data,
+                                        struct wl_keyboard *keyboard,
+                                        int32_t rate, int32_t delay) {
+  // Handle key repeat configuration - usually not needed for shader apps
+}
+
+static const struct wl_keyboard_listener keyboard_listener = {
+    .keymap = keyboard_handle_keymap,
+    .enter = keyboard_handle_enter,
+    .leave = keyboard_handle_leave,
+    .key = keyboard_handle_key,
+    .modifiers = keyboard_handle_modifiers,
+    .repeat_info = keyboard_handle_repeat_info,
+};
+
+// }}>
+
 // <{{ Seat listener
 
 static void seat_handle_capabilities(void *data, struct wl_seat *seat,
@@ -368,10 +433,20 @@ static void seat_handle_capabilities(void *data, struct wl_seat *seat,
   struct state *state = data;
   if (!state)
     return;
+
+  // Add mouse handling
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !state->pointer) {
     state->pointer = wl_seat_get_pointer(seat);
     if (state->pointer) {
       wl_pointer_add_listener(state->pointer, &pointer_listener, state);
+    }
+  }
+
+  // Add keyboard handling
+  if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !state->wl_keyboard) {
+    state->wl_keyboard = wl_seat_get_keyboard(seat);
+    if (state->wl_keyboard) {
+      wl_keyboard_add_listener(state->wl_keyboard, &keyboard_listener, state);
     }
   }
 }
@@ -663,6 +738,8 @@ int main(int argc, char *argv[]) {
     destroy_output(output);
   }
 
+  if (state.wl_keyboard)
+    wl_keyboard_release(state.wl_keyboard);
   if (state.pointer)
     wl_pointer_release(state.pointer);
   if (state.seat)

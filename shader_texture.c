@@ -7,6 +7,8 @@ bool load_shader_texture(shader_texture *tex) {
   unsigned char *data =
       stbi_load(tex->path, &width, &height, NULL, STBI_rgb_alpha);
   if (!data) {
+    fprintf(stderr, "Error: Could not load texture from source path '%s'\n",
+            tex->path);
     return false;
   }
 

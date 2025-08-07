@@ -17,6 +17,11 @@ wlsbg -0 t:examples/kiki.jpg '*' examples/pixelate.frag
 wlsbg '*' examples/mouse.frag
 ```
 
+```bash
+# Keyboard-controlled shader (focus the background and tap on your keyboard)
+wlsbg -0 tKeyboard '*' examples/keyboard.frag
+```
+
 ## Buffer Pipelines
 
 ```bash

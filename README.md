@@ -28,9 +28,15 @@ _\* Compile-time dependencies_
 ### Compiling from Source
 
 ```bash
-meson build/
+meson setup build/
 ninja -C build/
 sudo ninja -C build/ install
+```
+
+Or you can just run the convenient setup, build and install scripts.
+
+```bash
+./setup.sh && ./build.sh && ./install.sh
 ```
 
 ## Documentation

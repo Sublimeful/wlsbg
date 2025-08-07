@@ -21,6 +21,13 @@ struct _shader_context {
 
   shader_buffer *buf;
 
+  struct {
+    GLuint tex;            // Keyboard state texture
+    bool key[256];         // Current key states
+    bool prev_key[256];    // Previous key states
+    bool key_toggled[256]; // Whether key is toggled
+  } keyboard;
+
   bool initialized;
 };
 

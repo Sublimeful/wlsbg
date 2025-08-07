@@ -125,6 +125,11 @@ shader_channel *parse_token(const char *input, int *pos,
 
     // Register if named
     if (name_len > 0) {
+      // Can not define multiple resources with the same name and type
+      if (registry_lookup(*registry, name, type)) {
+        fprintf(stderr, "Error: Resource '%s' already defined\n", name);
+        exit(EXIT_FAILURE);
+      }
       registry_add(registry, name, type, channel);
     }
   } else {
@@ -133,11 +138,13 @@ shader_channel *parse_token(const char *input, int *pos,
       fprintf(stderr, "Error: Reference must include a name\n");
       exit(EXIT_FAILURE);
     }
-    channel = registry_lookup(*registry, name, type);
-    if (!channel) {
+    resource_registry *existing_registry =
+        registry_lookup(*registry, name, type);
+    if (!existing_registry) {
       fprintf(stderr, "Error: Resource '%s' not found\n", name);
       exit(EXIT_FAILURE);
     }
+    channel = registry_pop(existing_registry);
   }
   free(name);
   return channel;

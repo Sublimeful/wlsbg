@@ -4,6 +4,7 @@
 #include "resource_registry.h"
 #include "shader_buffer.h"
 #include "shader_channel.h"
+#include "shader_texture.h"
 #include "shader_uniform.h"
 #include "stb_image.h"
 #include "util.h"
@@ -236,14 +237,26 @@ shader_context *shader_create(struct wl_display *display,
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
-  // Create a registry
-  resource_registry *registry = NULL;
-
   // Allocate main buffer
   ctx->buf = malloc(sizeof(shader_buffer));
   if (!ctx->buf)
     goto error;
   memset(ctx->buf, 0, sizeof(shader_buffer));
+
+  // Create a registry
+  resource_registry *registry = NULL;
+
+  // Add keyboard texture to registry
+  shader_channel *channel = malloc(sizeof(shader_channel));
+  shader_texture *tex = malloc(sizeof(shader_texture));
+  tex->tex_id = ctx->keyboard.tex;
+  tex->width = 256;
+  tex->height = 3;
+  tex->path = NULL;
+  channel->tex = tex;
+  channel->type = TEXTURE;
+  channel->initialized = true;
+  registry_add(&registry, "Keyboard", TEXTURE, channel);
 
   // Parse channel inputs
   for (int i = 0; i < 10; i++) {
@@ -253,6 +266,18 @@ shader_context *shader_create(struct wl_display *display,
   }
 
   registry_free(registry);
+
+  // Initialize keyboard states
+  memset(ctx->keyboard.prev_key, 0, 256);
+  memset(ctx->keyboard.key, 0, 256);
+  memset(ctx->keyboard.key_toggled, 0, 256);
+  // Create keyboard texture
+  glGenTextures(1, &ctx->keyboard.tex);
+  glBindTexture(GL_TEXTURE_2D, ctx->keyboard.tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 256, 3, 0, GL_RED, GL_UNSIGNED_BYTE,
+               NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   // Initialize main buffer
   ctx->buf->shader_path = shader_path ? strdup(shader_path) : NULL;
@@ -274,6 +299,30 @@ error:
 void shader_render(shader_context *ctx, double current_time, iMouse *mouse) {
   if (!ctx || !ctx->initialized)
     return;
+
+  // First 256 - Key down
+  // Second 256 - Key just pressed
+  // Third 256 - Key toggled
+  bool key[768];
+  for (int i = 0; i < 256; ++i) {
+    key[256 + i] = ctx->keyboard.prev_key[i] ^ ctx->keyboard.key[i];
+    if (ctx->keyboard.prev_key[i] == true) {
+      // Key was just released
+      key[256 + i] = false;
+    } else if (key[256 + i]) {
+      // Key was just pressed
+      ctx->keyboard.key_toggled[i] = !ctx->keyboard.key_toggled[i];
+    }
+  }
+  memcpy(key, ctx->keyboard.key, 256);
+  memcpy(key + 512, ctx->keyboard.key_toggled, 256);
+  // Update keyboard state for next frame
+  memcpy(ctx->keyboard.prev_key, ctx->keyboard.key, 256);
+
+  // Set keyboard texture
+  glBindTexture(GL_TEXTURE_2D, ctx->keyboard.tex);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 3, GL_RED, GL_UNSIGNED_BYTE,
+                  key);
 
   render_shader_buffer(ctx, ctx->buf, current_time, mouse);
 
@@ -312,6 +361,10 @@ void shader_destroy(shader_context *ctx) {
       glDeleteVertexArrays(1, &ctx->vao);
     if (ctx->vbo)
       glDeleteBuffers(1, &ctx->vbo);
+
+    if (ctx->keyboard.tex) {
+      glDeleteTextures(1, &ctx->keyboard.tex);
+    }
 
     if (ctx->buf) {
       free_shader_buffer(ctx->buf);
