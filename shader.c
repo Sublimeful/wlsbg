@@ -245,6 +245,7 @@ shader_context *shader_create(struct wl_display *display,
     goto error;
   memset(ctx->buf, 0, sizeof(shader_buffer));
 
+  // Parse channel inputs
   for (int i = 0; i < 10; i++) {
     if (!channel_input[i])
       continue;

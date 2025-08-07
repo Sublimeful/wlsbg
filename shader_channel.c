@@ -116,6 +116,8 @@ shader_channel *parse_token(const char *input, int *pos,
     case BUFFER:
       channel->buf = malloc(sizeof(shader_buffer));
       channel->buf->shader_path = path;
+      // Zero out channel array to prevent accessing unknown addresses
+      memset(channel->buf->channel, 0, sizeof(shader_channel *) * 10);
       break;
     default:
       break;

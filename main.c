@@ -504,13 +504,11 @@ int main(int argc, char *argv[]) {
   }
   wl_registry_add_listener(state.registry, &registry_listener, &state);
 
-  for (int i = 0; i < 3; ++i) {
-    if (wl_display_roundtrip(state.display) < 0) {
-      fprintf(stderr, "wl_display_roundtrip failed");
-      wl_registry_destroy(state.registry);
-      wl_display_disconnect(state.display);
-      return 1;
-    }
+  if (wl_display_roundtrip(state.display) < 0) {
+    fprintf(stderr, "wl_display_roundtrip failed");
+    wl_registry_destroy(state.registry);
+    wl_display_disconnect(state.display);
+    return EXIT_FAILURE;
   }
 
   if (!state.compositor || !state.layer_shell) {
