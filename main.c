@@ -95,8 +95,8 @@ struct output {
   struct wl_output *wl_output;
   char *name;
 
-  struct wl_surface *surface;
   struct zwlr_layer_surface_v1 *layer_surface;
+  struct wl_surface *surface;
   shader_context *shader_ctx;
 
   struct wp_viewport *viewport;
@@ -112,10 +112,12 @@ static void destroy_output(struct output *output) {
   if (!output)
     return;
 
-  if (output->shader_ctx)
-    shader_destroy(output->shader_ctx);
   if (output->frame_callback)
     wl_callback_destroy(output->frame_callback);
+  if (output->viewport)
+    wp_viewport_destroy(output->viewport);
+  if (output->shader_ctx)
+    shader_destroy(output->shader_ctx);
   if (output->surface)
     wl_surface_destroy(output->surface);
   if (output->layer_surface)
@@ -665,6 +667,8 @@ int main(int argc, char *argv[]) {
     wl_pointer_release(state.pointer);
   if (state.seat)
     wl_seat_destroy(state.seat);
+  if (state.viewporter)
+    wp_viewporter_destroy(state.viewporter);
   if (state.layer_shell)
     zwlr_layer_shell_v1_destroy(state.layer_shell);
   if (state.compositor)
