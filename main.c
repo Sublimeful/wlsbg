@@ -1,5 +1,6 @@
 #include "shader.h"
 #include "shader_uniform.h"
+#include "viewporter-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include <errno.h>
 #include <getopt.h>
@@ -17,7 +18,8 @@
 	"Options:\n"																																  \
   "  -h,     --help                   Show help message and quit.\n"            \
   "  -v,     --version                Show the version number and quit.\n"      \
-  "  -f,     --fps <int>              Max FPS limit of the shader.\n"           \
+  "  -f,     --fps <number>           Max FPS limit of the shader.\n"           \
+  "  -x,     --scale <number>         Set the resolution scale.\n"              \
   "  -l,     --layer <layer>          Set the layer to display on.\n"           \
   "  -s,     --shared-shader <path>   Set the shared shader file.\n"            \
   "  -[0-9], --channel[0-9] <path>    Set the resource for a channel.\n"        \
@@ -41,6 +43,7 @@ static const struct option options[] = {
     {"help", no_argument, NULL, 'h'},
     {"version", no_argument, NULL, 'v'},
     {"fps", required_argument, NULL, 'f'},
+    {"scale", required_argument, NULL, 'x'},
     {"layer", required_argument, NULL, 'l'},
     {"shared-shader", required_argument, NULL, 's'},
     {"channel0", required_argument, NULL, '0'},
@@ -60,6 +63,7 @@ struct state {
   struct wl_registry *registry;
   struct wl_compositor *compositor;
   struct zwlr_layer_shell_v1 *layer_shell;
+  struct wp_viewporter *viewporter;
   struct wl_seat *seat;
   struct wl_pointer *pointer;
   struct wl_list outputs;
@@ -68,6 +72,7 @@ struct state {
   char *shader_path;
   char *shared_shader_path;
   float fps;
+  float scale;
   enum zwlr_layer_shell_v1_layer layer;
   struct timespec start_time;
 
@@ -94,7 +99,9 @@ struct output {
   struct zwlr_layer_surface_v1 *layer_surface;
   shader_context *shader_ctx;
 
+  struct wp_viewport *viewport;
   int width, height;
+  float scale;
   bool needs_ack;
   bool needs_resize;
   uint32_t last_serial;
@@ -162,11 +169,17 @@ static void layer_surface_configure(void *data,
     // First configure: create shader context
     output->shader_ctx =
         shader_create(state->display, output->surface, state->shader_path,
-                      state->shared_shader_path, output->width, output->height,
-                      state->channel_input);
+                      state->shared_shader_path, output->width * output->scale,
+                      output->height * output->scale, state->channel_input);
     if (!output->shader_ctx) {
       fprintf(stderr, "Failed to create shader context\n");
       exit(EXIT_FAILURE);
+    }
+
+    // Set viewport destination size
+    if (output->viewport) {
+      wp_viewport_set_destination(output->viewport, output->width,
+                                  output->height);
     }
 
     zwlr_layer_surface_v1_ack_configure(surface, serial);
@@ -232,6 +245,11 @@ static void output_done(void *data, struct wl_output *wl_output) {
       fprintf(stderr, "Failed to create surface\n");
       return;
     }
+    // Create viewport if viewporter is available
+    if (state->viewporter) {
+      output->viewport =
+          wp_viewporter_get_viewport(state->viewporter, output->surface);
+    }
     output->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         state->layer_shell, output->surface, output->wl_output, state->layer,
         "wlsbg");
@@ -257,7 +275,9 @@ static void output_done(void *data, struct wl_output *wl_output) {
 
 static void output_scale(void *data, struct wl_output *wl_output,
                          int32_t factor) {
-  // Unused
+  struct output *output = data;
+  if (output)
+    output->scale = factor * output->state->scale;
 }
 
 static void output_name(void *data, struct wl_output *wl_output,
@@ -392,6 +412,9 @@ static void registry_global(void *data, struct wl_registry *registry,
     }
     wl_output_add_listener(output->wl_output, &output_listener, output);
     wl_list_insert(&state->outputs, &output->link);
+  } else if (strcmp(interface, wp_viewporter_interface.name) == 0) {
+    state->viewporter =
+        wl_registry_bind(registry, name, &wp_viewporter_interface, 1);
   } else if (strcmp(interface, wl_seat_interface.name) == 0) {
     state->seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
     if (state->seat) {
@@ -425,14 +448,15 @@ static double timespec_to_sec(struct timespec ts) {
 int main(int argc, char *argv[]) {
   struct state state = {0};
   state.fps = DEFAULT_FPS;
+  state.scale = 1;
   state.layer = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
   wl_list_init(&state.outputs);
   clock_gettime(CLOCK_MONOTONIC, &state.start_time);
 
   // Parse command line
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvf:l:s:0:1:2:3:4:5:6:7:8:9:", options,
-                            NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hvf:x:l:s:0:1:2:3:4:5:6:7:8:9:",
+                            options, NULL)) != -1) {
     switch (opt) {
     case 'h':
       printf(USAGE_STRING);
@@ -445,6 +469,15 @@ int main(int argc, char *argv[]) {
       if (state.fps <= 0) {
         state.fps = DEFAULT_FPS;
         fprintf(stderr, "FPS must be a valid number >0, defaulting to 60fps\n");
+      }
+      break;
+    case 'x':
+      state.scale = atof(optarg);
+      if (state.scale <= 0) {
+        state.scale = 1;
+        fprintf(
+            stderr,
+            "Resolution scale must be a valid number >0, defaulting to 1x\n");
       }
       break;
     case 'l':
@@ -505,7 +538,7 @@ int main(int argc, char *argv[]) {
   wl_registry_add_listener(state.registry, &registry_listener, &state);
 
   if (wl_display_roundtrip(state.display) < 0) {
-    fprintf(stderr, "wl_display_roundtrip failed");
+    fprintf(stderr, "wl_display_roundtrip failed\n");
     wl_registry_destroy(state.registry);
     wl_display_disconnect(state.display);
     return EXIT_FAILURE;
@@ -583,7 +616,8 @@ int main(int argc, char *argv[]) {
 
         // Handle pending resize
         if (output->needs_resize) {
-          shader_resize(output->shader_ctx, output->width, output->height);
+          shader_resize(output->shader_ctx, output->width * output->scale,
+                        output->height * output->scale);
           output->needs_resize = false;
         }
 
@@ -595,15 +629,19 @@ int main(int argc, char *argv[]) {
         }
 
         // Create iMouse struct for uniform
-        iMouse mouse = {.real_x = state.mouse.x,
-                        .real_y = output->height - state.mouse.y,
-                        .x = state.mouse.down_x,
-                        .y = output->height - state.mouse.down_y,
-                        .z = state.mouse.is_down ? state.mouse.click_x
-                                                 : -state.mouse.click_x,
-                        .w = state.mouse.is_clicked
-                                 ? output->height - state.mouse.click_y
-                                 : -(output->height - state.mouse.click_y)};
+        float scale_x = (float)(output->width * output->scale) / output->width;
+        float scale_y =
+            (float)(output->height * output->scale) / output->height;
+        iMouse mouse = {
+            .real_x = state.mouse.x * scale_x,
+            .real_y = (output->height - state.mouse.y) * scale_y,
+            .x = state.mouse.down_x * scale_x,
+            .y = (output->height - state.mouse.down_y) * scale_y,
+            .z = state.mouse.is_down ? state.mouse.click_x * scale_x
+                                     : -state.mouse.click_x * scale_x,
+            .w = state.mouse.is_clicked
+                     ? (output->height - state.mouse.click_y) * scale_y
+                     : -(output->height - state.mouse.click_y) * scale_y};
         // Mouse click should only be for 1 frame
         state.mouse.is_clicked = false;
 

@@ -22,6 +22,10 @@ Displays a shader on specified outputs of your Wayland session with support for 
 	Max FPS (Frames per second) limit of the shader.
 	If unspecified then the max fps will default to 60.
 
+*-x, --scale* <number>
+	Resolution scale of the shader, setting this to a lower number will improve performance.
+	If unspecified then the scale will default to 1x.
+
 *-l, --layer* <layer>
 	Set the layer to display on, valid types are: _background_, _bottom_, _top_, or _overlay_.
 	Default is _background_.

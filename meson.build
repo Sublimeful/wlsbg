@@ -1,7 +1,7 @@
 project(
   'wlsbg',
   'c',
-  version: '3.0.1',
+  version: '3.1.0',
   license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
@@ -74,6 +74,7 @@ protos_src = []
 
 client_protocols = [
   wl_protocol_dir / 'stable/xdg-shell/xdg-shell.xml',
+  wl_protocol_dir / 'stable/viewporter/viewporter.xml',
   'wlr-layer-shell-unstable-v1.xml',
 ]
 
