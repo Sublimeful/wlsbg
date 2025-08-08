@@ -182,11 +182,9 @@ void free_shader_channel(shader_channel *channel) {
     glDeleteTextures(1, &channel->tex->tex_id);
     free(channel->tex->path);
     free(channel->tex);
-    channel->tex = NULL;
     break;
   case BUFFER:
     free_shader_buffer(channel->buf);
-    channel->buf = NULL;
     break;
   default:
     break;
