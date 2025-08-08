@@ -114,15 +114,13 @@ shader_channel *parse_token(const char *input, int *pos,
       channel->tex->path = path;
       break;
     case BUFFER:
-      channel->buf = malloc(sizeof(shader_buffer));
-      memset(channel->buf, 0, sizeof(shader_buffer));
+      channel->buf = calloc(1, sizeof(shader_buffer));
       channel->buf->shader_path = path;
       break;
     default:
       break;
     }
 
-    // Register if named
     if (name_len > 0) {
       // Can not define multiple resources with the same name and type
       if (registry_lookup(*registry, name, type)) {
@@ -130,6 +128,8 @@ shader_channel *parse_token(const char *input, int *pos,
         exit(EXIT_FAILURE);
       }
       registry_add(registry, name, type, channel);
+    } else {
+      registry_add(registry, NULL, type, channel);
     }
   } else {
     // Reference existing resource
@@ -137,11 +137,14 @@ shader_channel *parse_token(const char *input, int *pos,
       fprintf(stderr, "Error: Reference must include a name\n");
       exit(EXIT_FAILURE);
     }
-    channel = registry_lookup(*registry, name, type);
-    if (!channel) {
+    resource_registry *existing_registry =
+        registry_lookup(*registry, name, type);
+    if (!existing_registry) {
       fprintf(stderr, "Error: Resource '%s' not found\n", name);
       exit(EXIT_FAILURE);
     }
+    channel = existing_registry->channel;
+    existing_registry->referenced = true;
   }
   free(name);
   return channel;
@@ -190,26 +193,6 @@ void free_shader_channel(shader_channel *channel) {
   }
 
   free(channel);
-}
-
-static void accumulate_shader_channel(shader_channel *channel,
-                                      resource_registry **accumulated) {
-  if (registry_contains_channel(*accumulated, channel))
-    return;
-  registry_add(accumulated, NULL, channel->type, channel);
-  if (channel->type != BUFFER)
-    return;
-  for (int i = 0; i < 10; ++i) {
-    if (!channel->buf->channel[i])
-      continue;
-    accumulate_shader_channel(channel->buf->channel[i], accumulated);
-  }
-}
-
-void free_shader_channel_recursive(shader_channel *channel) {
-  resource_registry *accumulated = NULL;
-  accumulate_shader_channel(channel, &accumulated);
-  registry_free(accumulated, true);
 }
 
 // Get texture ID from any channel type

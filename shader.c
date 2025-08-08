@@ -155,7 +155,7 @@ shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface, char *shader_path,
                               char *shared_shader_path, int width, int height,
                               char *channel_input[10]) {
-  shader_context *ctx = calloc(1, sizeof(shader_context));
+  shader_context *ctx = malloc(sizeof(shader_context));
   if (!ctx)
     return NULL;
 
@@ -238,13 +238,12 @@ shader_context *shader_create(struct wl_display *display,
   glEnableVertexAttribArray(0);
 
   // Allocate main buffer
-  ctx->buf = malloc(sizeof(shader_buffer));
+  ctx->buf = calloc(1, sizeof(shader_buffer));
   if (!ctx->buf)
     goto error;
-  memset(ctx->buf, 0, sizeof(shader_buffer));
 
   // Create a registry
-  resource_registry *registry = NULL;
+  ctx->registry = NULL;
 
   // Add keyboard texture to registry
   shader_channel *channel = malloc(sizeof(shader_channel));
@@ -256,16 +255,15 @@ shader_context *shader_create(struct wl_display *display,
   channel->tex = tex;
   channel->type = TEXTURE;
   channel->initialized = true;
-  registry_add(&registry, "Keyboard", TEXTURE, channel);
+  registry_add(&ctx->registry, "Keyboard", TEXTURE, channel);
 
   // Parse channel inputs
   for (int i = 0; i < 10; i++) {
     if (!channel_input[i])
       continue;
-    ctx->buf->channel[i] = parse_channel_input(channel_input[i], &registry);
+    ctx->buf->channel[i] =
+        parse_channel_input(channel_input[i], &ctx->registry);
   }
-
-  registry_free(registry, false);
 
   // Initialize keyboard states
   memset(ctx->keyboard.prev_key, 0, 256);
@@ -367,13 +365,9 @@ void shader_destroy(shader_context *ctx) {
       glDeleteTextures(1, &ctx->keyboard.tex);
     }
 
-    if (ctx->buf) {
-      shader_channel *dummy_channel = malloc(sizeof(shader_channel));
-      dummy_channel->type = BUFFER;
-      dummy_channel->buf = ctx->buf;
-      free_shader_channel_recursive(dummy_channel);
-      ctx->buf = NULL;
-    }
+    registry_free(ctx->registry);
+
+    free_shader_buffer(ctx->buf);
 
     if (ctx->egl_surface)
       eglDestroySurface(ctx->egl_display, ctx->egl_surface);

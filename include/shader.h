@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <wayland-client-protocol.h>
 
+typedef struct _resource_registry resource_registry;
 typedef struct _shader_buffer shader_buffer;
 typedef struct _iMouse iMouse;
 
@@ -19,6 +20,7 @@ struct _shader_context {
 
   GLuint vao, vbo;
 
+  resource_registry *registry;
   shader_buffer *buf;
 
   struct {

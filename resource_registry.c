@@ -10,35 +10,26 @@ void registry_add(resource_registry **registry, const char *name,
   entry->type = type;
   entry->channel = channel;
   entry->next = *registry;
+  entry->referenced = false;
   *registry = entry;
 }
 
-shader_channel *registry_lookup(resource_registry *registry, const char *name,
-                                shader_channel_type type) {
+resource_registry *registry_lookup(resource_registry *registry,
+                                   const char *name, shader_channel_type type) {
   for (resource_registry *cur = registry; cur; cur = cur->next) {
+    if (!cur->name)
+      continue;
     if (strcmp(cur->name, name) == 0 && cur->type == type) {
-      return cur->channel;
+      return cur;
     }
   }
   return NULL;
 }
 
-bool registry_contains_channel(resource_registry *registry,
-                               shader_channel *channel) {
-  for (resource_registry *cur = registry; cur; cur = cur->next) {
-    if (cur->channel == channel)
-      return true;
-  }
-  return false;
-}
-
-void registry_free(resource_registry *registry, bool free_shader_channels) {
+void registry_free(resource_registry *registry) {
   while (registry) {
     resource_registry *next = registry->next;
-    if (free_shader_channels && registry->channel) {
-      free_shader_channel(registry->channel);
-      registry->channel = NULL;
-    }
+    free_shader_channel(registry->channel);
     free(registry->name);
     free(registry);
     registry = next;

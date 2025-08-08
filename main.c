@@ -1,4 +1,6 @@
+#include "resource_registry.h"
 #include "shader.h"
+#include "shader_channel.h"
 #include "shader_uniform.h"
 #include "viewporter-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
@@ -186,6 +188,16 @@ static void layer_surface_configure(void *data,
                                   output->height);
     }
 
+    // If the keyboard resource was referenced
+    // enable keyboard input for this output
+    resource_registry *keyboard_registry =
+        registry_lookup(output->shader_ctx->registry, "Keyboard", TEXTURE);
+    if (keyboard_registry->referenced) {
+      zwlr_layer_surface_v1_set_keyboard_interactivity(
+          output->layer_surface,
+          ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
+    }
+
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
     // First draw
@@ -271,9 +283,6 @@ static void output_done(void *data, struct wl_output *wl_output) {
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
     zwlr_layer_surface_v1_set_exclusive_zone(output->layer_surface, -1);
-    zwlr_layer_surface_v1_set_keyboard_interactivity(
-        output->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
     zwlr_layer_surface_v1_add_listener(output->layer_surface,
                                        &layer_surface_listener, output);
     wl_surface_commit(output->surface);

@@ -13,14 +13,13 @@ struct _resource_registry {
   shader_channel_type type;
   shader_channel *channel;
   resource_registry *next;
+  bool referenced;
 };
 
 void registry_add(resource_registry **registry, const char *name,
                   shader_channel_type type, shader_channel *channel);
-shader_channel *registry_lookup(resource_registry *registry, const char *name,
-                                shader_channel_type type);
-bool registry_contains_channel(resource_registry *registry,
-                               shader_channel *channel);
-void registry_free(resource_registry *registry, bool free_shader_channels);
+resource_registry *registry_lookup(resource_registry *registry,
+                                   const char *name, shader_channel_type type);
+void registry_free(resource_registry *registry);
 
 #endif

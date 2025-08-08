@@ -10,7 +10,6 @@ void free_shader_buffer(shader_buffer *buf) {
   if (!buf)
     return;
 
-  memset(buf->channel, 0, sizeof(shader_channel *) * 10);
   if (buf->program)
     glDeleteProgram(buf->program);
   if (buf->fbo)
@@ -61,7 +60,6 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
   if (!buf->u) {
     return false;
   }
-  memset(buf->u, 0, sizeof(shader_uniform));
   set_uniform_locations(buf->program, buf->u);
 
   // Initialize buffer channels
