@@ -28,11 +28,11 @@ shader_channel *parse_token(const char *input, int *pos,
   if (input[*pos] == '(') {
     // Parse nested expression
     (*pos)++;
-    shader_channel *token[5] = {0};
+    shader_channel *token[11] = {0};
     int count = 0;
 
     while (input[*pos] && input[*pos] != ')') {
-      if (count >= 5)
+      if (count >= 11)
         break;
       shader_channel *current_token = parse_token(input, pos, registry);
       if (!current_token)
@@ -115,9 +115,8 @@ shader_channel *parse_token(const char *input, int *pos,
       break;
     case BUFFER:
       channel->buf = malloc(sizeof(shader_buffer));
+      memset(channel->buf, 0, sizeof(shader_buffer));
       channel->buf->shader_path = path;
-      // Zero out channel array to prevent accessing unknown addresses
-      memset(channel->buf->channel, 0, sizeof(shader_channel *) * 10);
       break;
     default:
       break;
@@ -138,13 +137,11 @@ shader_channel *parse_token(const char *input, int *pos,
       fprintf(stderr, "Error: Reference must include a name\n");
       exit(EXIT_FAILURE);
     }
-    resource_registry *existing_registry =
-        registry_lookup(*registry, name, type);
-    if (!existing_registry) {
+    channel = registry_lookup(*registry, name, type);
+    if (!channel) {
       fprintf(stderr, "Error: Resource '%s' not found\n", name);
       exit(EXIT_FAILURE);
     }
-    channel = registry_pop(existing_registry);
   }
   free(name);
   return channel;
@@ -154,9 +151,9 @@ shader_channel *parse_token(const char *input, int *pos,
 shader_channel *parse_channel_input(const char *input,
                                     resource_registry **registry_pointer) {
   int pos = 0, count = 0;
-  shader_channel *channel[5] = {0};
+  shader_channel *channel[11] = {0};
 
-  while (count < 5) {
+  while (count < 11) {
     shader_channel *token = parse_token(input, &pos, registry_pointer);
     if (!token)
       break;
@@ -173,7 +170,6 @@ shader_channel *parse_channel_input(const char *input,
   return last_token;
 }
 
-// Recursive function to free channel structure
 void free_shader_channel(shader_channel *channel) {
   if (!channel)
     return;
@@ -183,15 +179,37 @@ void free_shader_channel(shader_channel *channel) {
     glDeleteTextures(1, &channel->tex->tex_id);
     free(channel->tex->path);
     free(channel->tex);
+    channel->tex = NULL;
     break;
   case BUFFER:
     free_shader_buffer(channel->buf);
+    channel->buf = NULL;
     break;
   default:
     break;
   }
 
   free(channel);
+}
+
+static void accumulate_shader_channel(shader_channel *channel,
+                                      resource_registry **accumulated) {
+  if (registry_contains_channel(*accumulated, channel))
+    return;
+  registry_add(accumulated, NULL, channel->type, channel);
+  if (channel->type != BUFFER)
+    return;
+  for (int i = 0; i < 10; ++i) {
+    if (!channel->buf->channel[i])
+      continue;
+    accumulate_shader_channel(channel->buf->channel[i], accumulated);
+  }
+}
+
+void free_shader_channel_recursive(shader_channel *channel) {
+  resource_registry *accumulated = NULL;
+  accumulate_shader_channel(channel, &accumulated);
+  registry_free(accumulated, true);
 }
 
 // Get texture ID from any channel type
@@ -216,13 +234,11 @@ bool init_channel_recursive(shader_channel *channel, int width, int height,
   switch (channel->type) {
   case TEXTURE:
     if (!load_shader_texture(channel->tex)) {
-      free_shader_channel(channel);
       return false;
     }
     break;
   case BUFFER:
     if (!init_shader_buffer(channel->buf, width, height, shared_shader_path)) {
-      free_shader_channel(channel);
       return false;
     }
     break;

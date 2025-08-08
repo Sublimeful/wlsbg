@@ -265,7 +265,7 @@ shader_context *shader_create(struct wl_display *display,
     ctx->buf->channel[i] = parse_channel_input(channel_input[i], &registry);
   }
 
-  registry_free(registry);
+  registry_free(registry, false);
 
   // Initialize keyboard states
   memset(ctx->keyboard.prev_key, 0, 256);
@@ -368,7 +368,10 @@ void shader_destroy(shader_context *ctx) {
     }
 
     if (ctx->buf) {
-      free_shader_buffer(ctx->buf);
+      shader_channel *dummy_channel = malloc(sizeof(shader_channel));
+      dummy_channel->type = BUFFER;
+      dummy_channel->buf = ctx->buf;
+      free_shader_channel_recursive(dummy_channel);
       ctx->buf = NULL;
     }
 

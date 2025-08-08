@@ -10,12 +10,7 @@ void free_shader_buffer(shader_buffer *buf) {
   if (!buf)
     return;
 
-  for (int i = 0; i < 10; i++) {
-    if (buf->channel[i]) {
-      free_shader_channel(buf->channel[i]);
-      buf->channel[i] = NULL;
-    }
-  }
+  memset(buf->channel, 0, sizeof(shader_channel *) * 10);
   if (buf->program)
     glDeleteProgram(buf->program);
   if (buf->fbo)
@@ -73,9 +68,10 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
   for (int i = 0; i < 10; i++) {
     if (!buf->channel[i])
       continue;
+    buf->channel[i] = NULL;
     if (!init_channel_recursive(buf->channel[i], width, height,
                                 shared_shader_path)) {
-      buf->channel[i] = NULL;
+      return false;
     }
   }
 
