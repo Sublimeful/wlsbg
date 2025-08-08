@@ -66,13 +66,7 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
 
   // Initialize buffer channels
   for (int i = 0; i < 10; i++) {
-    if (!buf->channel[i])
-      continue;
-    buf->channel[i] = NULL;
-    if (!init_channel_recursive(buf->channel[i], width, height,
-                                shared_shader_path)) {
-      return false;
-    }
+    init_channel_recursive(buf->channel[i], width, height, shared_shader_path);
   }
 
   return true;
