@@ -4,6 +4,7 @@
 #include <GL/gl.h>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
+#include <stdbool.h>
 
 struct _shader_video {
   char *path;
@@ -14,8 +15,13 @@ struct _shader_video {
   int width;
   int height;
   int wakeup_fd;
+  double start_time;
   double last_seek_time;
+  double seek_threshold;
   double duration;
+  bool fbo_configured;
+  bool playing;
+  bool seeking;
 };
 
 typedef struct _shader_video shader_video;
