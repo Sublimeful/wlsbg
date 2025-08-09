@@ -80,7 +80,7 @@ Channels support a powerful syntax for creating complex rendering pipelines:
 	- b:buffer.frag        ; Shader buffer from fragment shader
 	- t:image.png          ; Texture from image file
     - v:video.mp4          ; Load video file
-    - a:audio.mp3          ; Load audio file
+    - a:audio.mp3          ; Load audio file (512x2 output, 1st row = waveform, 2nd row = spectrum)
 	- bBackground:bg.frag  ; Named buffer resource
 
 *Nested buffers:*
