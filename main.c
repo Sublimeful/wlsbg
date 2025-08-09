@@ -37,6 +37,7 @@
   "	- `b:<path>`: Create shader buffer from fragment shader\n"                  \
   "	- `t:<path>`: Load texture from image file\n"                               \
   "	- `v:<path>`: Load video file\n"                                            \
+  "	- `a:<path>`: Load audio file\n"                                            \
   "	- `(resources...)`: Nested buffer definitions\n"                            \
   "	- `<T>Name:<path>`: Named resources, parsed from left to right\n"
 // clang-format on

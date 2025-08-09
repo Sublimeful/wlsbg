@@ -10,6 +10,7 @@ wlsbg is an advanced wallpaper utility for Wayland compositors that supports com
 - 10-channel input pipeline
 - Nested shader buffers
 - Shared shader includes
+- Video and Audio input
 
 ## Installation
 

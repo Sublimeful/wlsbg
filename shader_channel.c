@@ -1,6 +1,7 @@
 #include "shader_channel.h"
 #include "resource_registry.h"
 #include "shader.h"
+#include "shader_audio.h"
 #include "shader_buffer.h"
 #include "shader_texture.h"
 #include "shader_uniform.h"
@@ -65,7 +66,8 @@ shader_channel *parse_token(const char *input, int *pos,
 
   // Parse type prefix (t or b)
   char type_char = input[*pos];
-  if (type_char != 'b' && type_char != 't' && type_char != 'v')
+  if (type_char != 'b' && type_char != 't' && type_char != 'v' &&
+      type_char != 'a')
     return NULL;
   (*pos)++;
 
@@ -80,6 +82,9 @@ shader_channel *parse_token(const char *input, int *pos,
     break;
   case 'v':
     type = VIDEO;
+    break;
+  case 'a':
+    type = AUDIO;
     break;
   default:
     break;
@@ -123,6 +128,21 @@ shader_channel *parse_token(const char *input, int *pos,
       break;
     case VIDEO:
       channel->vid = shader_video_create(path);
+      if (!channel->vid) {
+        fprintf(stderr, "Failed to create video channel from '%s'\n", path);
+        free(channel);
+        free(path);
+        return NULL;
+      }
+      break;
+    case AUDIO:
+      channel->aud = shader_audio_create(path);
+      if (!channel->aud) {
+        fprintf(stderr, "Failed to create audio channel from '%s'\n", path);
+        free(channel);
+        free(path);
+        return NULL;
+      }
       break;
     default:
       break;
@@ -196,6 +216,9 @@ void free_shader_channel(shader_channel *channel) {
   case VIDEO:
     shader_video_destroy(channel->vid);
     break;
+  case AUDIO:
+    shader_audio_destroy(channel->aud);
+    break;
   default:
     break;
   }
@@ -214,6 +237,8 @@ GLuint get_channel_texture(shader_channel *channel) {
     return channel->buf->textures[channel->buf->current_texture];
   } else if (channel->type == VIDEO) {
     return channel->vid->tex_id;
+  } else if (channel->type == AUDIO) {
+    return channel->aud->texture_id;
   }
 
   return 0;
@@ -240,6 +265,9 @@ bool init_channel_recursive(shader_channel *channel, int width, int height,
     }
     break;
   case VIDEO:
+    // No initialization needed beyond creation
+    break;
+  case AUDIO:
     // No initialization needed beyond creation
     break;
   default:

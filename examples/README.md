@@ -11,6 +11,9 @@ wlsbg -0 t:examples/kiki.jpg '*' examples/pixelate.frag
 
 # Shader with video input
 wlsbg -0 v:examples/buck.mp4 '*' examples/video.frag
+
+# Shader with audio input
+wlsbg -0 a:examples/audio.mp3 '*' examples/audio.frag
 ```
 
 ## Interactive Examples
@@ -67,5 +70,6 @@ wlsbg -0 "(bA:examples/buffer/multipass/bufferA.frag bB:examples/buffer/multipas
 | `b:path`       | Shader buffer               | `b:effect.frag`                    |
 | `t:path`       | Texture from image          | `t:image.png`                      |
 | `v:path`       | Video input                 | `v:video.mp4`                      |
+| `a:path`       | Audio input                 | `a:audio.mp3`                      |
 | `<T>name:path` | Named resource              | `bBackground:bg.frag`              |
 | `(res...)`     | Nested buffer configuration | `(t:tex.jpg b:fx.frag b:out.frag)` |

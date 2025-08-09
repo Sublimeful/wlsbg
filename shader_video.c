@@ -10,9 +10,14 @@ static void *get_proc_address_mpv(void *ctx, const char *name) {
   return eglGetProcAddress(name);
 }
 
-shader_video *shader_video_create(const char *path) {
+shader_video *shader_video_create(char *path) {
   shader_video *vid = calloc(1, sizeof(shader_video));
   if (!vid) {
+    goto error;
+  }
+
+  vid->path = path;
+  if (!vid->path) {
     goto error;
   }
 
@@ -67,7 +72,7 @@ shader_video *shader_video_create(const char *path) {
 
   // Initialize timing
   vid->last_seek_time = -1.0;
-  vid->video_duration = 0.0;
+  vid->duration = 0.0;
 
   return vid;
 
@@ -75,7 +80,6 @@ error:
   if (vid->mpv)
     mpv_destroy(vid->mpv);
   free(vid);
-  fprintf(stderr, "Could not create video shader context for '%s'\n", path);
   return NULL;
 }
 
@@ -84,18 +88,18 @@ void shader_video_update(shader_video *vid, double current_time) {
     return;
 
   // Get video duration if we don't have it yet
-  if (vid->video_duration == 0.0) {
+  if (vid->duration == 0.0) {
     double duration;
     if (mpv_get_property(vid->mpv, "duration", MPV_FORMAT_DOUBLE, &duration) >=
         0) {
-      vid->video_duration = duration;
+      vid->duration = duration;
     }
   }
 
   // If we have duration, loop the time
   double video_time = current_time;
-  if (vid->video_duration > 0.0) {
-    video_time = fmod(current_time, vid->video_duration);
+  if (vid->duration > 0.0) {
+    video_time = fmod(current_time, vid->duration);
   }
 
   // Seek to the desired time if it's different from last frame
@@ -172,6 +176,9 @@ void shader_video_render(shader_video *vid) {
 void shader_video_destroy(shader_video *vid) {
   if (!vid)
     return;
+
+  free(vid->path);
+  vid->path = NULL;
 
   if (vid->mpv_gl) {
     mpv_render_context_free(vid->mpv_gl);

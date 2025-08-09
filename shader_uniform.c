@@ -1,4 +1,5 @@
 #include "shader_uniform.h"
+#include "shader_audio.h"
 #include "shader_buffer.h"
 #include "shader_channel.h"
 #include "shader_texture.h"
@@ -30,6 +31,13 @@ void set_uniform_locations(GLuint program, shader_uniform *u) {
     char name[32];
     snprintf(name, sizeof(name), "iChannelResolution[%d]", i);
     u->channel_res[i] = glGetUniformLocation(program, name);
+  }
+
+  // Get channel duration uniforms
+  for (int i = 0; i < 10; i++) {
+    char name[32];
+    snprintf(name, sizeof(name), "iChannelDuration[%d]", i);
+    u->channel_dur[i] = glGetUniformLocation(program, name);
   }
 }
 
@@ -96,6 +104,27 @@ void set_uniforms(shader_buffer *buf, double current_time, iMouse *mouse) {
                     (float)buf->channel[i]->vid->height,
                     (float)buf->channel[i]->vid->width /
                         buf->channel[i]->vid->height);
+        break;
+      case AUDIO:
+        glUniform3f(buf->u->channel_res[i], (float)AUDIO_TEXTURE_WIDTH,
+                    (float)AUDIO_TEXTURE_HEIGHT,
+                    (float)AUDIO_TEXTURE_WIDTH / AUDIO_TEXTURE_HEIGHT);
+      default:
+        break;
+      }
+    }
+
+    if (buf->u->channel_dur[i] >= 0) {
+      switch (buf->channel[i]->type) {
+      case BUFFER:
+      case TEXTURE:
+        glUniform1f(buf->u->channel_dur[i], 0);
+        break;
+      case VIDEO:
+        glUniform1f(buf->u->channel_dur[i], buf->channel[i]->vid->duration);
+        break;
+      case AUDIO:
+        glUniform1f(buf->u->channel_dur[i], buf->channel[i]->aud->duration);
         break;
       default:
         break;

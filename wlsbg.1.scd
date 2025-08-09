@@ -38,6 +38,7 @@ Displays a shader on specified outputs of your Wayland session with support for 
 	- `b:<path>`: Create shader buffer from fragment shader
 	- `t:<path>`: Load texture from image file
     - `v:<path>`: Load video file
+    - `a:<path>`: Load audio file
 	- `(resources...)`: Nested buffer definitions
 	- `tName:<path>`, `bName:<path>`, etc.: Named resources, parsed/defined from left to right
 
@@ -63,6 +64,7 @@ Displays a shader on specified outputs of your Wayland session with support for 
 	- _iDate_                  = vec4: (year, month, day, seconds)
 	- _iChannel0..9_           = samplerXX: input channels
 	- _iChannelResolution[10]_ = vec3[10]: channel resolutions
+	- _iChannelDuration[10]_   = float[10]: duration in seconds of playback channel
 
 *About iMouse:*
 	- _iMouse.xy_              = Last mouse down position
@@ -78,6 +80,7 @@ Channels support a powerful syntax for creating complex rendering pipelines:
 	- b:buffer.frag        ; Shader buffer from fragment shader
 	- t:image.png          ; Texture from image file
     - v:video.mp4          ; Load video file
+    - a:audio.mp3          ; Load audio file
 	- bBackground:bg.frag  ; Named buffer resource
 
 *Nested buffers:*
