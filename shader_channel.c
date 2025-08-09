@@ -181,14 +181,18 @@ shader_channel *parse_token(const char *input, int *pos,
 shader_channel *parse_channel_input(const char *input,
                                     resource_registry **registry_pointer) {
   int pos = 0, count = 0;
-  shader_channel *channel[11] = {0};
+  shader_channel *channel[10] = {0};
 
-  while (count < 11) {
+  while (count < 10) {
     shader_channel *token = parse_token(input, &pos, registry_pointer);
     if (!token)
       break;
     channel[count++] = token;
   }
+
+  // Prevent reading undefined value from index -1
+  if (count == 0)
+    return NULL;
 
   shader_channel *last_token = channel[count - 1];
   for (int i = 0; i < count - 1; i++) {
