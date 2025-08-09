@@ -35,10 +35,11 @@ Displays a shader on specified outputs of your Wayland session with support for 
 
 *-[0-9], --channel[0-9]* <resource>
 	Set the input for a specified channel (0-9) using shader buffer syntax:
-	- `t:<path>`: Load texture from image file
 	- `b:<path>`: Create shader buffer from fragment shader
+	- `t:<path>`: Load texture from image file
+    - `v:<path>`: Load video file
 	- `(resources...)`: Nested buffer definitions
-	- `tName:<path>`, `bName:<path>`, etc.: Named resources, parsed from left to right
+	- `tName:<path>`, `bName:<path>`, etc.: Named resources, parsed/defined from left to right
 
 # REQUIRED ARGUMENTS
 
@@ -74,8 +75,9 @@ Displays a shader on specified outputs of your Wayland session with support for 
 Channels support a powerful syntax for creating complex rendering pipelines:
 
 *Basic resources:*
-	- t:image.png          ; Texture from image file
 	- b:buffer.frag        ; Shader buffer from fragment shader
+	- t:image.png          ; Texture from image file
+    - v:video.mp4          ; Load video file
 	- bBackground:bg.frag  ; Named buffer resource
 
 *Nested buffers:*

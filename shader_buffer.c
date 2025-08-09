@@ -2,6 +2,7 @@
 #include "shader.h"
 #include "shader_channel.h"
 #include "shader_uniform.h"
+#include "shader_video.h"
 #include <GLES3/gl3.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,11 +84,22 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   // Change parity
   buf->render_parity = !buf->render_parity;
 
-  // Recursively render inputs first
+  // Recursively render buffer inputs
   for (int i = 0; i < 10; i++) {
-    if (buf->channel[i] && buf->channel[i]->type == BUFFER &&
-        buf->channel[i]->buf->render_parity != buf->render_parity) {
+    if (!buf->channel[i])
+      continue;
+    switch (buf->channel[i]->type) {
+    case BUFFER:
+      if (buf->channel[i]->buf->render_parity == buf->render_parity)
+        break;
       render_shader_buffer(ctx, buf->channel[i]->buf, current_time, mouse);
+      break;
+    case VIDEO:
+      shader_video_update(buf->channel[i]->vid, current_time);
+      shader_video_render(buf->channel[i]->vid);
+      break;
+    default:
+      break;
     }
   }
 
@@ -103,18 +115,6 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
 
   // Set uniforms
   set_uniforms(buf, current_time, mouse);
-
-  // Bind input textures
-  for (int i = 0; i < 10; i++) {
-    if (buf->channel[i]) {
-      GLuint tex_id = get_channel_texture(buf->channel[i]);
-      if (tex_id) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, tex_id);
-        glUniform1i(buf->u->channel[i], i);
-      }
-    }
-  }
 
   // Draw
   glBindVertexArray(ctx->vao);

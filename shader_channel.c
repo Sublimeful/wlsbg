@@ -4,6 +4,7 @@
 #include "shader_buffer.h"
 #include "shader_texture.h"
 #include "shader_uniform.h"
+#include "shader_video.h"
 #include <GL/gl.h>
 #include <GLES3/gl3.h>
 #include <ctype.h>
@@ -64,18 +65,21 @@ shader_channel *parse_token(const char *input, int *pos,
 
   // Parse type prefix (t or b)
   char type_char = input[*pos];
-  if (type_char != 't' && type_char != 'b')
+  if (type_char != 'b' && type_char != 't' && type_char != 'v')
     return NULL;
   (*pos)++;
 
   // Set type
   shader_channel_type type = NONE;
   switch (type_char) {
+  case 'b':
+    type = BUFFER;
+    break;
   case 't':
     type = TEXTURE;
     break;
-  case 'b':
-    type = BUFFER;
+  case 'v':
+    type = VIDEO;
     break;
   default:
     break;
@@ -109,13 +113,16 @@ shader_channel *parse_token(const char *input, int *pos,
     channel->type = type;
 
     switch (type) {
+    case BUFFER:
+      channel->buf = calloc(1, sizeof(shader_buffer));
+      channel->buf->shader_path = path;
+      break;
     case TEXTURE:
       channel->tex = malloc(sizeof(shader_texture));
       channel->tex->path = path;
       break;
-    case BUFFER:
-      channel->buf = calloc(1, sizeof(shader_buffer));
-      channel->buf->shader_path = path;
+    case VIDEO:
+      channel->vid = shader_video_create(path);
       break;
     default:
       break;
@@ -178,13 +185,16 @@ void free_shader_channel(shader_channel *channel) {
     return;
 
   switch (channel->type) {
+  case BUFFER:
+    free_shader_buffer(channel->buf);
+    break;
   case TEXTURE:
     glDeleteTextures(1, &channel->tex->tex_id);
     free(channel->tex->path);
     free(channel->tex);
     break;
-  case BUFFER:
-    free_shader_buffer(channel->buf);
+  case VIDEO:
+    shader_video_destroy(channel->vid);
     break;
   default:
     break;
@@ -195,11 +205,17 @@ void free_shader_channel(shader_channel *channel) {
 
 // Get texture ID from any channel type
 GLuint get_channel_texture(shader_channel *channel) {
+  if (!channel)
+    return 0;
+
   if (channel->type == TEXTURE) {
     return channel->tex->tex_id;
   } else if (channel->type == BUFFER) {
     return channel->buf->textures[channel->buf->current_texture];
+  } else if (channel->type == VIDEO) {
+    return channel->vid->tex_id;
   }
+
   return 0;
 }
 
@@ -213,15 +229,18 @@ bool init_channel_recursive(shader_channel *channel, int width, int height,
   channel->initialized = true;
 
   switch (channel->type) {
+  case BUFFER:
+    if (!init_shader_buffer(channel->buf, width, height, shared_shader_path)) {
+      return false;
+    }
+    break;
   case TEXTURE:
     if (!load_shader_texture(channel->tex)) {
       return false;
     }
     break;
-  case BUFFER:
-    if (!init_shader_buffer(channel->buf, width, height, shared_shader_path)) {
-      return false;
-    }
+  case VIDEO:
+    // No initialization needed beyond creation
     break;
   default:
     break;

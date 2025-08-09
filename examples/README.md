@@ -8,6 +8,9 @@ wlsbg '*' examples/retro.frag
 
 # Shader with texture input
 wlsbg -0 t:examples/kiki.jpg '*' examples/pixelate.frag
+
+# Shader with video input
+wlsbg -0 v:examples/buck.mp4 '*' examples/video.frag
 ```
 
 ## Interactive Examples
@@ -61,7 +64,8 @@ wlsbg -0 "(bA:examples/buffer/multipass/bufferA.frag bB:examples/buffer/multipas
 
 | Syntax         | Description                 | Example                            |
 | -------------- | --------------------------- | ---------------------------------- |
-| `t:path`       | Texture from image          | `t:image.png`                      |
 | `b:path`       | Shader buffer               | `b:effect.frag`                    |
+| `t:path`       | Texture from image          | `t:image.png`                      |
+| `v:path`       | Video input                 | `v:video.mp4`                      |
 | `<T>name:path` | Named resource              | `bBackground:bg.frag`              |
 | `(res...)`     | Nested buffer configuration | `(t:tex.jpg b:fx.frag b:out.frag)` |
