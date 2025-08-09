@@ -19,6 +19,7 @@ jobs:
             libwayland-dev \
             wayland-protocols \
             libegl1-mesa-dev \
+            libmpv-dev \
             mpv \
             scdoc
       - name: setup
