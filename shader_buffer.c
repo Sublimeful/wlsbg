@@ -1,5 +1,6 @@
 #include "shader_buffer.h"
 #include "shader.h"
+#include "shader_audio.h"
 #include "shader_channel.h"
 #include "shader_uniform.h"
 #include "shader_video.h"
@@ -97,6 +98,9 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
     case VIDEO:
       shader_video_update(buf->channel[i]->vid, current_time);
       shader_video_render(buf->channel[i]->vid);
+      break;
+    case AUDIO:
+      shader_audio_update(buf->channel[i]->aud, current_time);
       break;
     default:
       break;

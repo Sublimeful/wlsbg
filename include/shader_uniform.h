@@ -27,6 +27,7 @@ struct _shader_uniform {
   GLint date;            // Uniform location for iDate
   GLint channel[10];     // Uniform locations for iChannel0-iChannel9
   GLint channel_res[10]; // Uniform locations for iChannelResolution
+  GLint channel_dur[10]; // Uniform locations for iChannelDuration
 };
 
 typedef struct _shader_uniform shader_uniform;

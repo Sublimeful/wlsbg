@@ -8,8 +8,9 @@ typedef struct _resource_registry resource_registry;
 typedef struct _shader_texture shader_texture;
 typedef struct _shader_buffer shader_buffer;
 typedef struct _shader_video shader_video;
+typedef struct _shader_audio shader_audio;
 
-enum _shader_channel_type { NONE, BUFFER, TEXTURE, VIDEO };
+enum _shader_channel_type { NONE, BUFFER, TEXTURE, VIDEO, AUDIO };
 typedef enum _shader_channel_type shader_channel_type;
 
 struct _shader_channel {
@@ -17,6 +18,7 @@ struct _shader_channel {
     shader_buffer *buf;
     shader_texture *tex;
     shader_video *vid;
+    shader_audio *aud;
   };
   shader_channel_type type;
   bool initialized;

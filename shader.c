@@ -1,5 +1,3 @@
-#define STB_IMAGE_IMPLEMENTATION
-
 #include "shader.h"
 #include "resource_registry.h"
 #include "shader_buffer.h"
@@ -47,6 +45,7 @@ static const char *FRAGMENT_SHADER_TEMPLATE =
     "uniform sampler2D iChannel8;\n"
     "uniform sampler2D iChannel9;\n"
     "uniform vec3 iChannelResolution[10];\n"
+    "uniform vec3 iChannelDuration[10];\n"
     "out vec4 fragColor;\n"
     "%s\n"
     "%s\n"

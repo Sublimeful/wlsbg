@@ -1,3 +1,5 @@
+#define STB_IMAGE_IMPLEMENTATION
+
 #include "shader_texture.h"
 #include "stb_image.h"
 
