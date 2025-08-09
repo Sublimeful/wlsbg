@@ -21,7 +21,7 @@ jobs:
             libegl1-mesa-dev \
             libmpv-dev \
             mpv \
-            fftw3 \
+            libfftw3-dev \
             scdoc
       - name: setup
         run: meson build/ --fatal-meson-warnings -Dauto_features=enabled

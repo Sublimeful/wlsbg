@@ -20,8 +20,8 @@ wlsbg is an advanced wallpaper utility for Wayland compositors that supports com
 - wayland
 - wayland-protocols\*
 - egl-mesa
-- mpv
-- fftw
+- mpv (for video playback)
+- fftw (for audio analysis)
 - [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (man pages)\*
 - git (version info)\*
 - stb_image (bundled)
