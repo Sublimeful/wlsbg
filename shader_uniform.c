@@ -1,5 +1,8 @@
 #include "shader_uniform.h"
 #include "shader_buffer.h"
+#include "shader_channel.h"
+#include "shader_texture.h"
+#include "shader_video.h"
 #include <GLES3/gl3.h>
 #include <stdio.h>
 #include <time.h>
@@ -59,5 +62,44 @@ void set_uniforms(shader_buffer *buf, double current_time, iMouse *mouse) {
     float seconds = tm->tm_sec + tm->tm_min * 60 + tm->tm_hour * 3600;
     glUniform4f(buf->u->date, (float)(tm->tm_year + 1900), (float)tm->tm_mon,
                 (float)tm->tm_mday, seconds);
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    if (!buf->channel[i])
+      continue;
+
+    if (buf->u->channel[i] >= 0) {
+      GLuint tex_id = get_channel_texture(buf->channel[i]);
+      if (tex_id) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, tex_id);
+        glUniform1i(buf->u->channel[i], i);
+      }
+    }
+
+    if (buf->u->channel_res[i] >= 0) {
+      switch (buf->channel[i]->type) {
+      case BUFFER:
+        glUniform3f(buf->u->channel_res[i], (float)buf->channel[i]->buf->width,
+                    (float)buf->channel[i]->buf->height,
+                    (float)buf->channel[i]->buf->width /
+                        buf->channel[i]->buf->height);
+        break;
+      case TEXTURE:
+        glUniform3f(buf->u->channel_res[i], (float)buf->channel[i]->tex->width,
+                    (float)buf->channel[i]->tex->height,
+                    (float)buf->channel[i]->tex->width /
+                        buf->channel[i]->tex->height);
+        break;
+      case VIDEO:
+        glUniform3f(buf->u->channel_res[i], (float)buf->channel[i]->vid->width,
+                    (float)buf->channel[i]->vid->height,
+                    (float)buf->channel[i]->vid->width /
+                        buf->channel[i]->vid->height);
+        break;
+      default:
+        break;
+      }
+    }
   }
 }

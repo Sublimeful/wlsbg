@@ -7,14 +7,16 @@
 typedef struct _resource_registry resource_registry;
 typedef struct _shader_texture shader_texture;
 typedef struct _shader_buffer shader_buffer;
+typedef struct _shader_video shader_video;
 
-enum _shader_channel_type { NONE, TEXTURE, BUFFER };
+enum _shader_channel_type { NONE, BUFFER, TEXTURE, VIDEO };
 typedef enum _shader_channel_type shader_channel_type;
 
 struct _shader_channel {
   union {
-    shader_texture *tex;
     shader_buffer *buf;
+    shader_texture *tex;
+    shader_video *vid;
   };
   shader_channel_type type;
   bool initialized;

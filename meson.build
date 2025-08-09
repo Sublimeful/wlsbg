@@ -1,7 +1,7 @@
 project(
   'wlsbg',
   'c',
-  version: '3.1.9.1',
+  version: '3.2.0',
   license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
@@ -33,6 +33,7 @@ wayland_protos = dependency('wayland-protocols', version: '>=1.31')
 wayland_scanner = dependency('wayland-scanner', version: '>=1.14.91', native: true)
 opengl = dependency('gl')
 egl = dependency('egl')
+mpv = dependency('mpv')
 
 git = find_program('git', required: false, native: true)
 scdoc = find_program('scdoc', required: get_option('man-pages'), native: true)
@@ -88,6 +89,7 @@ dependencies = [
   wayland_egl,
   opengl,
   egl,
+  mpv,
 ]
 
 executable(
@@ -95,10 +97,11 @@ executable(
   [
     'main.c',
     'shader.c',
-    'shader_buffer.c',
-    'shader_channel.c',
-    'shader_texture.c',
     'shader_uniform.c',
+    'shader_channel.c',
+    'shader_buffer.c',
+    'shader_texture.c',
+    'shader_video.c',
     'resource_registry.c',
     'util.c',
     protos_src,

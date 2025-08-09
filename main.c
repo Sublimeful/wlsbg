@@ -34,8 +34,9 @@
   "  background, bottom, top, or overlay\n"                                     \
 	"\n"																																				  \
   "Channel Resources (More information can be found in the man page):\n"        \
-  "	- `t:<path>`: Load texture from image file\n"                               \
   "	- `b:<path>`: Create shader buffer from fragment shader\n"                  \
+  "	- `t:<path>`: Load texture from image file\n"                               \
+  "	- `v:<path>`: Load video file\n"                                            \
   "	- `(resources...)`: Nested buffer definitions\n"                            \
   "	- `<T>Name:<path>`: Named resources, parsed from left to right\n"
 // clang-format on
