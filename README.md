@@ -49,3 +49,10 @@ See `man wlsbg` or [online documentation](https://github.com/Sublimeful/wlsbg/wi
 ## Contributing
 
 Submit issues and PRs at [GitHub repository](https://github.com/Sublimeful/wlsbg)
+
+## Acknowledgments
+
+shaderbg and swaybg for the initial boilerplate code, check them out here:
+
+- https://sr.ht/~mstoeckl/shaderbg
+- https://github.com/swaywm/swaybg

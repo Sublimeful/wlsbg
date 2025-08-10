@@ -37,8 +37,8 @@ Displays a shader on specified outputs of your Wayland session with support for 
 	Set the input for a specified channel (0-9) using shader buffer syntax:
 	- `b:<path>`: Create shader buffer from fragment shader
 	- `t:<path>`: Load texture from image file
-    - `v:<path>`: Load video file
-    - `a:<path>`: Load audio file
+	- `v:<path>`: Load video file
+	- `a:<path>`: Load audio file
 	- `(resources...)`: Nested buffer definitions
 	- `tName:<path>`, `bName:<path>`, etc.: Named resources, parsed/defined from left to right
 
@@ -79,8 +79,8 @@ Channels support a powerful syntax for creating complex rendering pipelines:
 *Basic resources:*
 	- b:buffer.frag        ; Shader buffer from fragment shader
 	- t:image.png          ; Texture from image file
-    - v:video.mp4          ; Load video file
-    - a:audio.mp3          ; Load audio file (512x2 output, 1st row = waveform, 2nd row = spectrum)
+	- v:video.mp4          ; Load video file
+	- a:audio.mp3          ; Load audio file (512x2 output, 1st row = waveform, 2nd row = spectrum)
 	- bBackground:bg.frag  ; Named buffer resource
 
 *Nested buffers:*
