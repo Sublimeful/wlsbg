@@ -5,6 +5,7 @@
 #include <EGL/eglext.h>
 #include <GL/gl.h>
 #include <stdbool.h>
+#include <time.h>
 #include <wayland-client-protocol.h>
 
 typedef struct _resource_registry resource_registry;
@@ -39,7 +40,8 @@ shader_context *shader_create(struct wl_display *display,
                               struct wl_surface *surface, char *shader_path,
                               char *shared_shader_path, int width, int height,
                               char *channel_input[10]);
-void shader_render(shader_context *ctx, double current_time, iMouse *mouse);
+void shader_render(shader_context *ctx, struct timespec start_time,
+                   iMouse *mouse);
 void shader_resize(shader_context *ctx, int width, int height);
 void shader_destroy(shader_context *ctx);
 

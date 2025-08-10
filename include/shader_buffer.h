@@ -3,6 +3,7 @@
 
 #include <GL/gl.h>
 #include <stdbool.h>
+#include <time.h>
 
 typedef struct _shader_channel shader_channel;
 typedef struct _shader_uniform shader_uniform;
@@ -29,6 +30,6 @@ void free_shader_buffer(shader_buffer *buf);
 bool init_shader_buffer(shader_buffer *buf, int width, int height,
                         char *shared_shader_path);
 void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
-                          double current_time, iMouse *mouse);
+                          struct timespec start_time, iMouse *mouse);
 
 #endif

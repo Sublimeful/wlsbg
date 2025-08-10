@@ -4,6 +4,7 @@
 #include "shader_channel.h"
 #include "shader_uniform.h"
 #include "shader_video.h"
+#include "util.h"
 #include <GLES3/gl3.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,7 +79,7 @@ bool init_shader_buffer(shader_buffer *buf, int width, int height,
 }
 
 void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
-                          double current_time, iMouse *mouse) {
+                          struct timespec start_time, iMouse *mouse) {
   if (!ctx || !buf)
     return;
 
@@ -93,14 +94,14 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
     case BUFFER:
       if (buf->channel[i]->buf->render_parity == buf->render_parity)
         break;
-      render_shader_buffer(ctx, buf->channel[i]->buf, current_time, mouse);
+      render_shader_buffer(ctx, buf->channel[i]->buf, start_time, mouse);
       break;
     case VIDEO:
-      shader_video_update(buf->channel[i]->vid, current_time);
+      shader_video_update(buf->channel[i]->vid, start_time);
       shader_video_render(buf->channel[i]->vid);
       break;
     case AUDIO:
-      shader_audio_update(buf->channel[i]->aud, current_time);
+      shader_audio_update(buf->channel[i]->aud, start_time);
       break;
     default:
       break;
@@ -118,7 +119,7 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   glViewport(0, 0, buf->width, buf->height);
 
   // Set uniforms
-  set_uniforms(buf, current_time, mouse);
+  set_uniforms(buf, start_time, mouse);
 
   // Draw
   glBindVertexArray(ctx->vao);
@@ -131,6 +132,6 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   buf->current_texture = next_tex;
 
   // Update state for next frame
-  buf->last_time = current_time;
+  buf->last_time = current_time_in_sec();
   buf->frame++;
 }

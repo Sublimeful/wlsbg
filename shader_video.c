@@ -1,4 +1,5 @@
 #include "shader_video.h"
+#include "util.h"
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <math.h>
@@ -10,13 +11,6 @@
 static void *get_proc_address_mpv(void *ctx, const char *name) {
   (void)ctx;
   return eglGetProcAddress(name);
-}
-
-// Get current time in seconds
-static double get_time_seconds() {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
 
 shader_video *shader_video_create(char *path) {
@@ -49,12 +43,13 @@ shader_video *shader_video_create(char *path) {
   mpv_set_option_string(vid->mpv, "loop", "inf");
   mpv_set_option_string(vid->mpv, "audio", "no");
   mpv_set_option_string(vid->mpv, "video-sync", "display-resample");
+  mpv_set_option_string(vid->mpv, "interpolation", "yes");
 
   // Enable smooth seeking and frame dropping
   mpv_set_option_string(vid->mpv, "hr-seek", "yes");
   mpv_set_option_string(vid->mpv, "hr-seek-framedrop", "yes");
   mpv_set_option_string(vid->mpv, "cache", "yes");
-  mpv_set_option_string(vid->mpv, "cache-secs", "10");
+  mpv_set_option_string(vid->mpv, "cache-pause", "no");
 
   // Start playing immediately instead of paused
   mpv_set_option_string(vid->mpv, "pause", "no");
@@ -121,18 +116,16 @@ shader_video *shader_video_create(char *path) {
     return NULL;
   }
 
-  // Initialize timing
-  vid->start_time = get_time_seconds();
-  vid->last_seek_time = -1.0;
-  vid->duration = 0.0;
-  vid->seek_threshold = 0.3; // Only seek if off by more than 300ms
-  vid->fbo_configured = false;
+  // Initialize timings
+  vid->seek_threshold = 0.5; // Only seek if desynced by more than 500ms
+  vid->seek_cooldown = 1.0;  // 1 second seek cooldown
+  vid->speed_adjustment_threshold = 0.1;
   vid->playing = true;
 
   return vid;
 }
 
-void shader_video_update(shader_video *vid, double current_time) {
+void shader_video_update(shader_video *vid, struct timespec start_time) {
   if (!vid || !vid->mpv)
     return;
 
@@ -188,25 +181,40 @@ void shader_video_update(shader_video *vid, double current_time) {
     }
   }
 
-  // Only seek if we're significantly out of sync and not already seeking
-  if (!vid->seeking && vid->duration > 0.0) {
-    double target_time = fmod(current_time, vid->duration);
-
+  // Check if we can seek and enough time has passed since last seek
+  double time_since_seek = time_elapsed(vid->last_seek_time);
+  if (!vid->seeking && time_since_seek > vid->seek_cooldown &&
+      vid->duration > 0.0) {
+    double target_time = fmod(time_elapsed(start_time), vid->duration);
     double current_pos;
+
     if (mpv_get_property(vid->mpv, "time-pos", MPV_FORMAT_DOUBLE,
                          &current_pos) >= 0) {
-      double time_diff = fabs(target_time - current_pos);
+      double time_diff = target_time - current_pos; // Note: not absolute value
 
-      // Only seek if we're off by more than the threshold
-      if (time_diff > vid->seek_threshold) {
+      if (fabs(time_diff) > vid->seek_threshold) {
         char time_str[32];
-        snprintf(time_str, sizeof(time_str), "%.3f", target_time);
+        snprintf(time_str, sizeof(time_str), "%f", target_time);
         const char *seek_cmd[] = {"seek", time_str, "absolute+exact", NULL};
 
         if (mpv_command_async(vid->mpv, 0, seek_cmd) >= 0) {
           vid->seeking = true;
-          vid->last_seek_time = target_time;
+          vid->last_seek_time = current_time(); // Record seek time
         }
+      } else if (fabs(time_diff) > vid->speed_adjustment_threshold) {
+        // Small difference: adjust speed
+        double speed = 1.0;
+        if (time_diff > 0) {
+          speed = 1.05; // Speed up slightly if behind
+        } else {
+          speed = 0.95; // Slow down slightly if ahead
+        }
+        mpv_set_property_async(vid->mpv, 0, "speed", MPV_FORMAT_DOUBLE, &speed);
+      } else {
+        // Close enough: reset to normal speed
+        double normal_speed = 1.0;
+        mpv_set_property_async(vid->mpv, 0, "speed", MPV_FORMAT_DOUBLE,
+                               &normal_speed);
       }
     }
   }
@@ -269,17 +277,6 @@ void shader_video_render(shader_video *vid) {
   // Restore previous state
   glBindFramebuffer(GL_FRAMEBUFFER, current_fbo);
   glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-}
-
-void shader_video_set_time(shader_video *vid, double time) {
-  if (!vid || vid->duration <= 0.0)
-    return;
-
-  double target_time = fmod(time, vid->duration);
-  char time_str[32];
-  snprintf(time_str, sizeof(time_str), "%.3f", target_time);
-  const char *seek_cmd[] = {"seek", time_str, "absolute+exact", NULL};
-  mpv_command_async(vid->mpv, 0, seek_cmd);
 }
 
 void shader_video_destroy(shader_video *vid) {

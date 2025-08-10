@@ -4,6 +4,7 @@
 #include "shader_channel.h"
 #include "shader_texture.h"
 #include "shader_video.h"
+#include "util.h"
 #include <GLES3/gl3.h>
 #include <stdio.h>
 #include <time.h>
@@ -41,16 +42,19 @@ void set_uniform_locations(GLuint program, shader_uniform *u) {
   }
 }
 
-void set_uniforms(shader_buffer *buf, double current_time, iMouse *mouse) {
+void set_uniforms(shader_buffer *buf, struct timespec start_time,
+                  iMouse *mouse) {
+  double elapsed_time = time_elapsed(start_time);
+
   // Calculate delta time and fps
-  double delta = (buf->frame == 0) ? 0 : (current_time - buf->last_time);
+  double delta = (buf->frame == 0) ? 0 : (elapsed_time - buf->last_time);
   float fps = (delta > 0) ? (1.0f / delta) : 0;
 
   if (buf->u->resolution >= 0)
     glUniform3f(buf->u->resolution, (float)buf->width, (float)buf->height,
                 (float)buf->width / buf->height);
   if (buf->u->time >= 0)
-    glUniform1f(buf->u->time, (float)current_time);
+    glUniform1f(buf->u->time, (float)elapsed_time);
   if (buf->u->time_delta >= 0)
     glUniform1f(buf->u->time_delta, (float)delta);
   if (mouse) {

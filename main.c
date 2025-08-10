@@ -2,6 +2,7 @@
 #include "shader.h"
 #include "shader_channel.h"
 #include "shader_uniform.h"
+#include "util.h"
 #include "viewporter-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include <errno.h>
@@ -203,7 +204,7 @@ static void layer_surface_configure(void *data,
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
     // First draw
-    shader_render(output->shader_ctx, 0, NULL);
+    shader_render(output->shader_ctx, current_time(), NULL);
 
     // Setup frame callback (rendering happens later)
     output->frame_callback = wl_surface_frame(output->surface);
@@ -529,10 +530,6 @@ static const struct wl_registry_listener registry_listener = {
 
 // }}>
 
-static double timespec_to_sec(struct timespec ts) {
-  return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
-}
-
 int main(int argc, char *argv[]) {
   struct state state = {0};
   state.fps = DEFAULT_FPS;
@@ -656,11 +653,8 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
     // Calculate time until next frame
-    double sec_until_next = timespec_to_sec(next_frame) - timespec_to_sec(now);
+    double sec_until_next = timespec_to_sec(next_frame) - current_time_in_sec();
     int timeout_ms = sec_until_next > 0 ? (int)(sec_until_next * 1000) : 0;
 
     // Poll for events
@@ -684,17 +678,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Render if it's time
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    if (timespec_to_sec(now) >= timespec_to_sec(next_frame)) {
+    if (current_time_in_sec() >= timespec_to_sec(next_frame)) {
       // Update next frame time
       next_frame.tv_nsec += (long)(frame_time * 1e9);
       if (next_frame.tv_nsec >= 1e9) {
         next_frame.tv_nsec -= 1e9;
         next_frame.tv_sec++;
       }
-
-      // Calculate elapsed time
-      double elapsed = timespec_to_sec(now) - timespec_to_sec(state.start_time);
 
       // Render all outputs
       struct output *output, *tmp;
@@ -733,7 +723,7 @@ int main(int argc, char *argv[]) {
         // Mouse click should only be for 1 frame
         state.mouse.is_clicked = false;
 
-        shader_render(output->shader_ctx, elapsed, &mouse);
+        shader_render(output->shader_ctx, state.start_time, &mouse);
 
         // Setup frame callback
         output->frame_callback = wl_surface_frame(output->surface);

@@ -1,6 +1,7 @@
 #define MINIAUDIO_IMPLEMENTATION
 
 #include "shader_audio.h"
+#include "util.h"
 #include <GLES3/gl3.h>
 #include <math.h>
 #include <stdio.h>
@@ -9,45 +10,63 @@
 
 #define PI_F 3.14159265358979323846f
 
-void audio_data_callback(ma_device *pDevice, void *pOutput, const void *pInput,
-                         ma_uint32 frameCount) {
-  shader_audio *audio = (shader_audio *)pDevice->pUserData;
+void audio_data_callback(ma_device *device, void *output, const void *input,
+                         ma_uint32 frame_count) {
+  shader_audio *audio = (shader_audio *)device->pUserData;
   if (!audio)
     return;
 
-  (void)pInput; // pInput is not used in playback mode
+  (void)input; // input is not used in playback mode
 
-  ma_uint64 framesRead;
+  ma_uint64 frames_read;
+  ma_uint64 cursor;
 
-  ma_result result = ma_decoder_read_pcm_frames(
-      &audio->decoder, audio->audio_buffer, frameCount, &framesRead);
+  ma_result result;
+  result = ma_decoder_read_pcm_frames(&audio->decoder, audio->audio_buffer,
+                                      frame_count, &frames_read);
   // When audio playback finishes, loop
   if (result != MA_SUCCESS) {
     ma_decoder_seek_to_pcm_frame(&audio->decoder, 0);
-    ma_decoder_read_pcm_frames(&audio->decoder, audio->audio_buffer, frameCount,
-                               &framesRead);
+    ma_decoder_read_pcm_frames(&audio->decoder, audio->audio_buffer,
+                               frame_count, &frames_read);
+  }
+
+  // Check if we need to sync up
+  result = ma_decoder_get_cursor_in_pcm_frames(&audio->decoder, &cursor);
+  if (result == MA_SUCCESS) {
+    double current_pos = (double)cursor / audio->sample_rate;
+    double elapsed_time = time_elapsed(audio->start_time);
+    double target_time = fmod(elapsed_time, audio->duration);
+
+    double time_diff = fabs(target_time - current_pos);
+    if (time_diff > audio->seek_threshold) {
+      double target_frames = target_time * audio->sample_rate;
+      ma_decoder_seek_to_pcm_frame(&audio->decoder, target_frames);
+      ma_decoder_read_pcm_frames(&audio->decoder, audio->audio_buffer,
+                                 frame_count, &frames_read);
+    }
   }
 
   pthread_mutex_lock(&audio->buffer_mutex);
 
-  for (ma_uint32 i = 0; i < framesRead * audio->channels; i++) {
+  for (ma_uint32 i = 0; i < frames_read * audio->channels; i++) {
     audio->circular_buffer[audio->write_pos] = audio->audio_buffer[i];
     audio->write_pos = (audio->write_pos + 1) % audio->circular_buffer_size;
   }
 
   pthread_mutex_unlock(&audio->buffer_mutex);
 
-  float *pFloatOutput = (float *)pOutput;
+  float *float_output = (float *)output;
 
   // Write to output to create sound
-  for (ma_uint32 i = 0; i < framesRead * audio->channels; i++) {
-    pFloatOutput[i] = audio->audio_buffer[i];
+  for (ma_uint32 i = 0; i < frames_read * audio->channels; i++) {
+    float_output[i] = audio->audio_buffer[i];
   }
 
   // Fill remainder with silence
-  for (ma_uint32 i = framesRead * audio->channels;
-       i < frameCount * audio->channels; i++) {
-    pFloatOutput[i] = 0.0f;
+  for (ma_uint32 i = frames_read * audio->channels;
+       i < frame_count * audio->channels; i++) {
+    float_output[i] = 0.0f;
   }
 }
 
@@ -75,12 +94,30 @@ shader_audio *shader_audio_create(char *path) {
   ma_format format;
   ma_uint32 channels;
   ma_uint32 sampleRate;
-  ma_decoder_get_data_format(&audio->decoder, &format, &channels, &sampleRate,
-                             NULL, 0);
-
+  result = ma_decoder_get_data_format(&audio->decoder, &format, &channels,
+                                      &sampleRate, NULL, 0);
+  if (result != MA_SUCCESS) {
+    fprintf(stderr, "Failed to read the audio data format: %s\n",
+            ma_result_description(result));
+    ma_decoder_uninit(&audio->decoder);
+    free(audio);
+    return NULL;
+  }
   audio->format = format;
   audio->channels = channels;
   audio->sample_rate = sampleRate;
+
+  // Get and set the duration of the audio
+  ma_uint64 length;
+  result = ma_decoder_get_length_in_pcm_frames(&audio->decoder, &length);
+  if (result != MA_SUCCESS) {
+    fprintf(stderr, "Failed to get the length of the audio: %s\n",
+            ma_result_description(result));
+    ma_decoder_uninit(&audio->decoder);
+    free(audio);
+    return NULL;
+  }
+  audio->duration = (double)length / audio->sample_rate;
 
   // Setup circular buffer (2 seconds of audio)
   audio->circular_buffer_size = sampleRate * channels * 2;
@@ -130,6 +167,11 @@ shader_audio *shader_audio_create(char *path) {
     return NULL;
   }
 
+  // Initialize audio members
+  audio->start_time = current_time();
+  audio->seek_threshold = 0.5; // Only seek if desynced by more than 500ms
+  audio->is_playing = true;
+
   // Start playback
   if (ma_device_start(&audio->device) != MA_SUCCESS) {
     fprintf(stderr, "Failed to start audio device\n");
@@ -137,13 +179,14 @@ shader_audio *shader_audio_create(char *path) {
     return NULL;
   }
 
-  audio->is_playing = true;
   return audio;
 }
 
-void shader_audio_update(shader_audio *audio, double current_time) {
+void shader_audio_update(shader_audio *audio, struct timespec start_time) {
   if (!audio || !audio->is_playing)
     return;
+
+  audio->start_time = start_time;
 
   pthread_mutex_lock(&audio->buffer_mutex);
 

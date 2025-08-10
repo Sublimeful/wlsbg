@@ -20,6 +20,8 @@ struct _shader_audio {
   ma_uint32 channels;
   ma_uint32 sample_rate;
   double duration;
+  struct timespec start_time;
+  double seek_threshold;
 
   // Circular buffer
   float *circular_buffer;
@@ -46,7 +48,7 @@ struct _shader_audio {
 typedef struct _shader_audio shader_audio;
 
 shader_audio *shader_audio_create(char *path);
-void shader_audio_update(shader_audio *audio, double current_time);
+void shader_audio_update(shader_audio *audio, struct timespec start_time);
 void shader_audio_destroy(shader_audio *audio);
 
 #endif

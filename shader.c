@@ -293,7 +293,8 @@ error:
   return NULL;
 }
 
-void shader_render(shader_context *ctx, double current_time, iMouse *mouse) {
+void shader_render(shader_context *ctx, struct timespec start_time,
+                   iMouse *mouse) {
   if (!ctx || !ctx->initialized)
     return;
 
@@ -322,7 +323,7 @@ void shader_render(shader_context *ctx, double current_time, iMouse *mouse) {
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 3, GL_RED, GL_UNSIGNED_BYTE,
                   key);
 
-  render_shader_buffer(ctx, ctx->buf, current_time, mouse);
+  render_shader_buffer(ctx, ctx->buf, start_time, mouse);
 
   // Make context current
   eglMakeCurrent(ctx->egl_display, ctx->egl_surface, ctx->egl_surface,
