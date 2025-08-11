@@ -230,24 +230,6 @@ void free_shader_channel(shader_channel *channel) {
   free(channel);
 }
 
-// Get texture ID from any channel type
-GLuint get_channel_texture(shader_channel *channel) {
-  if (!channel)
-    return 0;
-
-  if (channel->type == TEXTURE) {
-    return channel->tex->tex_id;
-  } else if (channel->type == BUFFER) {
-    return channel->buf->textures[channel->buf->current_texture];
-  } else if (channel->type == VIDEO) {
-    return channel->vid->tex_id;
-  } else if (channel->type == AUDIO) {
-    return channel->aud->texture_id;
-  }
-
-  return 0;
-}
-
 bool init_channel_recursive(shader_channel *channel, int width, int height,
                             char *shared_shader_path) {
   if (!channel)

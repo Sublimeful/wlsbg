@@ -244,6 +244,20 @@ shader_context *shader_create(struct wl_display *display,
   // Create a registry
   ctx->registry = NULL;
 
+  // Initialize keyboard states
+  memset(ctx->keyboard.prev_key, 0, 256);
+  memset(ctx->keyboard.key, 0, 256);
+  memset(ctx->keyboard.key_toggled, 0, 256);
+  // Create keyboard texture
+  glGenTextures(1, &ctx->keyboard.tex);
+  glBindTexture(GL_TEXTURE_2D, ctx->keyboard.tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 256, 3, 0, GL_RED, GL_UNSIGNED_BYTE,
+               NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
   // Add keyboard texture to registry
   shader_channel *channel = malloc(sizeof(shader_channel));
   shader_texture *tex = malloc(sizeof(shader_texture));
@@ -263,18 +277,6 @@ shader_context *shader_create(struct wl_display *display,
     ctx->buf->channel[i] =
         parse_channel_input(channel_input[i], &ctx->registry);
   }
-
-  // Initialize keyboard states
-  memset(ctx->keyboard.prev_key, 0, 256);
-  memset(ctx->keyboard.key, 0, 256);
-  memset(ctx->keyboard.key_toggled, 0, 256);
-  // Create keyboard texture
-  glGenTextures(1, &ctx->keyboard.tex);
-  glBindTexture(GL_TEXTURE_2D, ctx->keyboard.tex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 256, 3, 0, GL_RED, GL_UNSIGNED_BYTE,
-               NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   // Initialize main buffer
   ctx->buf->shader_path = shader_path ? strdup(shader_path) : NULL;
@@ -302,10 +304,10 @@ void shader_render(shader_context *ctx, struct timespec start_time,
   // First 256 - Key down
   // Second 256 - Key just pressed
   // Third 256 - Key toggled
-  unsigned char key[768];
+  bool key[768];
   for (int i = 0; i < 256; ++i) {
-    key[i] = ctx->keyboard.key[i] * 255;
-    key[256 + i] = (ctx->keyboard.prev_key[i] ^ ctx->keyboard.key[i]) * 255;
+    key[i] = ctx->keyboard.key[i];
+    key[256 + i] = ctx->keyboard.prev_key[i] ^ ctx->keyboard.key[i];
     if (ctx->keyboard.prev_key[i] == true) {
       // Key was just released
       key[256 + i] = 0;
@@ -313,7 +315,7 @@ void shader_render(shader_context *ctx, struct timespec start_time,
       // Key was just pressed
       ctx->keyboard.key_toggled[i] = !ctx->keyboard.key_toggled[i];
     }
-    key[i + 512] = ctx->keyboard.key_toggled[i] * 255;
+    key[i + 512] = ctx->keyboard.key_toggled[i];
     // Update keyboard state for next frame
     ctx->keyboard.prev_key[i] = ctx->keyboard.key[i];
   }

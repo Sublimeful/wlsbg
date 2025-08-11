@@ -42,7 +42,7 @@ struct _shader_audio {
   fftwf_plan fft_plan;
 
   // OpenGL texture
-  GLuint texture_id;
+  GLuint tex_id;
 };
 
 typedef struct _shader_audio shader_audio;

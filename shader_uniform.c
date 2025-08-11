@@ -80,15 +80,6 @@ void set_uniforms(shader_buffer *buf, struct timespec start_time,
     if (!buf->channel[i])
       continue;
 
-    if (buf->u->channel[i] >= 0) {
-      GLuint tex_id = get_channel_texture(buf->channel[i]);
-      if (tex_id) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, tex_id);
-        glUniform1i(buf->u->channel[i], i);
-      }
-    }
-
     if (buf->u->channel_res[i] >= 0) {
       switch (buf->channel[i]->type) {
       case BUFFER:

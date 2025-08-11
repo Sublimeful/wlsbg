@@ -144,8 +144,8 @@ shader_audio *shader_audio_create(char *path) {
   audio->waveform_data = calloc(AUDIO_TEXTURE_WIDTH, sizeof(float));
 
   // Create OpenGL texture
-  glGenTextures(1, &audio->texture_id);
-  glBindTexture(GL_TEXTURE_2D, audio->texture_id);
+  glGenTextures(1, &audio->tex_id);
+  glBindTexture(GL_TEXTURE_2D, audio->tex_id);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, AUDIO_TEXTURE_WIDTH,
                AUDIO_TEXTURE_HEIGHT, 0, GL_RED, GL_FLOAT, NULL);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -272,7 +272,7 @@ void shader_audio_update(shader_audio *audio, struct timespec start_time) {
     texture_data[offset + i] = audio->frequency_data[i];
   }
 
-  glBindTexture(GL_TEXTURE_2D, audio->texture_id);
+  glBindTexture(GL_TEXTURE_2D, audio->tex_id);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, AUDIO_TEXTURE_WIDTH,
                   AUDIO_TEXTURE_HEIGHT, GL_RED, GL_FLOAT, texture_data);
 }
@@ -291,8 +291,8 @@ void shader_audio_destroy(shader_audio *audio) {
 
   ma_decoder_uninit(&audio->decoder);
 
-  if (audio->texture_id) {
-    glDeleteTextures(1, &audio->texture_id);
+  if (audio->tex_id) {
+    glDeleteTextures(1, &audio->tex_id);
   }
 
   fftwf_destroy_plan(audio->fft_plan);
