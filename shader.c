@@ -305,18 +305,18 @@ void shader_render(shader_context *ctx, struct timespec start_time,
   // First 256 - Key down
   // Second 256 - Key just pressed
   // Third 256 - Key toggled
-  bool key[768];
+  unsigned char key[768];
   for (int i = 0; i < 256; ++i) {
-    key[i] = ctx->keyboard.key[i];
-    key[256 + i] = ctx->keyboard.prev_key[i] ^ ctx->keyboard.key[i];
+    key[i] = ctx->keyboard.key[i] * 255;
+    key[i + 256] = (ctx->keyboard.prev_key[i] ^ ctx->keyboard.key[i]) * 255;
     if (ctx->keyboard.prev_key[i] == true) {
       // Key was just released
-      key[256 + i] = 0;
-    } else if (key[256 + i]) {
+      key[i + 256] = 0;
+    } else if (key[i + 256]) {
       // Key was just pressed
       ctx->keyboard.key_toggled[i] = !ctx->keyboard.key_toggled[i];
     }
-    key[i + 512] = ctx->keyboard.key_toggled[i];
+    key[i + 512] = ctx->keyboard.key_toggled[i] * 255;
     // Update keyboard state for next frame
     ctx->keyboard.prev_key[i] = ctx->keyboard.key[i];
   }
