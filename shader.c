@@ -25,6 +25,7 @@ static const char *VERTEX_SHADER_SOURCE =
 
 static const char *FRAGMENT_SHADER_TEMPLATE =
     "#version 320 es\n"
+    "precision highp int;\n"
     "precision highp float;\n"
     "uniform vec3 iResolution;\n"
     "uniform float iTime;\n"
