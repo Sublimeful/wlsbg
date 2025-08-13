@@ -1,7 +1,7 @@
 project(
   'wlsbg',
   'c',
-  version: '3.3.6',
+  version: '3.3.7',
   license: 'MIT',
   meson_version: '>=0.59.0',
   default_options: [
