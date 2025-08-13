@@ -185,6 +185,6 @@ void render_shader_buffer(shader_context *ctx, shader_buffer *buf,
   buf->current_texture = next_tex;
 
   // Update state for next frame
-  buf->last_time = current_time_in_sec();
+  buf->last_time = time_elapsed(start_time);
   buf->frame++;
 }
